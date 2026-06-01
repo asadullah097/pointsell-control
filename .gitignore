@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+
+# NEVER commit private keys
+keys/private.pem
+keys/*.pem
+keys/*.key
+
+*.js.map
