@@ -15,6 +15,7 @@ import { AuthController } from './modules/auth/auth.controller';
 import { Admin } from './modules/auth/admin.entity';
 import { AdminSeeder } from './modules/auth/admin.seeder';
 import { AdminGuard } from './common/guards/admin.guard';
+import { PosApiClient } from './common/clients/pos-api.client';
 
 @Module({
   imports: [
@@ -49,6 +50,6 @@ import { AdminGuard } from './common/guards/admin.guard';
     }),
   ],
   controllers: [AuthController, TenantsController, LicenseController, ReleasesController],
-  providers: [LicenseService, TenantsService, AdminSeeder, AdminGuard],
+  providers: [LicenseService, TenantsService, AdminSeeder, AdminGuard, PosApiClient],
 })
 export class AppModule {}

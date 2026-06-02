@@ -1,0 +1,147 @@
+import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+
+export interface PosTenant {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  status: string;
+  ownerEmail: string;
+  schemaName: string | null;
+  stripeSubscriptionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosTenantMetrics {
+  tenantId: string;
+  slug: string;
+  schemaName: string;
+  orderCount: number;
+  userCount: number;
+  productCount: number;
+  schemaSizeBytes: number;
+  lastOrderAt: string | null;
+  collectedAt: string;
+}
+
+/**
+ * PosApiClient — HTTP client for the nestjs-pos admin API.
+ *
+ * Used only when CLOUD_POS_API_URL is configured (cloud / SaaS mode).
+ * Falls back to a no-op / null pattern when not configured (local-only installs).
+ *
+ * Required env vars in pointsell-control:
+ *   CLOUD_POS_API_URL=https://api.pointsell.app
+ *   CONTROL_PANEL_API_KEY=<same 32-char key set in the POS backend>
+ */
+@Injectable()
+export class PosApiClient {
+  private readonly logger = new Logger(PosApiClient.name);
+  private readonly baseUrl: string | null;
+  private readonly apiKey: string | null;
+
+  constructor(config: ConfigService) {
+    this.baseUrl = config.get<string>('CLOUD_POS_API_URL') ?? null;
+    this.apiKey = config.get<string>('CONTROL_PANEL_API_KEY') ?? null;
+  }
+
+  get isConfigured(): boolean {
+    return !!(this.baseUrl && this.apiKey);
+  }
+
+  // ── Tenant list + detail ──────────────────────────────────────────────────
+
+  listTenants(): Promise<PosTenant[]> {
+    return this.get<PosTenant[]>('admin/tenants');
+  }
+
+  getTenant(id: string): Promise<PosTenant> {
+    return this.get<PosTenant>(`admin/tenants/${id}`);
+  }
+
+  updateTenant(id: string, body: Partial<Pick<PosTenant, 'plan' | 'status' | 'name'>>): Promise<PosTenant> {
+    return this.patch<PosTenant>(`admin/tenants/${id}`, body);
+  }
+
+  // ── Lifecycle actions ─────────────────────────────────────────────────────
+
+  suspendTenant(id: string): Promise<PosTenant> {
+    return this.post<PosTenant>(`admin/tenants/${id}/suspend`);
+  }
+
+  activateTenant(id: string): Promise<PosTenant> {
+    return this.post<PosTenant>(`admin/tenants/${id}/activate`);
+  }
+
+  reprovisionTenant(id: string): Promise<PosTenant> {
+    return this.post<PosTenant>(`admin/tenants/${id}/provision`);
+  }
+
+  deleteTenant(id: string): Promise<void> {
+    return this.delete(`admin/tenants/${id}`);
+  }
+
+  // ── Metrics ───────────────────────────────────────────────────────────────
+
+  getTenantMetrics(id: string): Promise<PosTenantMetrics> {
+    return this.get<PosTenantMetrics>(`admin/tenants/${id}/metrics`);
+  }
+
+  getAllMetrics(): Promise<PosTenantMetrics[]> {
+    return this.get<PosTenantMetrics[]>('admin/tenants/metrics/all');
+  }
+
+  // ── Private HTTP helpers ──────────────────────────────────────────────────
+
+  private async get<T>(path: string): Promise<T> {
+    return this.request<T>('GET', path);
+  }
+
+  private async post<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>('POST', path, body);
+  }
+
+  private async patch<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>('PATCH', path, body);
+  }
+
+  private async delete(path: string): Promise<void> {
+    await this.request<void>('DELETE', path);
+  }
+
+  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    if (!this.isConfigured) {
+      throw new InternalServerErrorException(
+        'CLOUD_POS_API_URL / CONTROL_PANEL_API_KEY not configured',
+      );
+    }
+
+    const url = `${this.baseUrl}/v1/${path}`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Control-Panel-Key': this.apiKey!,
+    };
+
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    if (res.status === 204) return undefined as T;
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      this.logger.error(`POS API ${method} ${url} → ${res.status}: ${JSON.stringify(data)}`);
+      throw new InternalServerErrorException(
+        (data as any)?.message ?? `POS API error ${res.status}`,
+      );
+    }
+
+    // nestjs-pos wraps responses in { success, data } envelope
+    return (data as any)?.data ?? data;
+  }
+}
