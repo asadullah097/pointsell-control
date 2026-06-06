@@ -1,7 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsEmail, IsEnum, IsObject, IsOptional, IsString, MinLength, ValidateNested } from 'class-validator';
+import { IsDateString, IsEmail, IsEnum, IsIn, IsObject, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TenantPlan, TenantStatus } from '../tenant.entity';
+
+export const BUSINESS_TYPES = ['retail', 'wholesale', 'hybrid', 'pharmacy', 'restaurant', 'service'] as const;
+export type BusinessType = typeof BUSINESS_TYPES[number];
 
 export class AutoLicenseDto {
   @ApiPropertyOptional({ enum: ['online', 'offline'], default: 'online' })
@@ -53,6 +56,40 @@ export class CreateTenantDto {
   @Type(() => AutoLicenseDto)
   @IsOptional()
   autoIssueLicense?: AutoLicenseDto;
+
+  // ── POS provisioning (cloud mode) ──────────────────────────────────────────
+  // When set, pointsell-control will call the POS backend to provision a schema,
+  // run all seeders, and create the admin user in one atomic step.
+
+  @ApiPropertyOptional({
+    example: 'acme-pharmacy',
+    description: 'Subdomain slug (becomes the POS schema prefix). Auto-derived from businessName if omitted.',
+  })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(50)
+  @Matches(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/, {
+    message: 'slug must be 2-50 chars, lowercase alphanumeric with optional hyphens',
+  })
+  @IsOptional()
+  slug?: string;
+
+  @ApiPropertyOptional({ enum: BUSINESS_TYPES, example: 'pharmacy' })
+  @IsIn(BUSINESS_TYPES, { message: `businessType must be one of: ${BUSINESS_TYPES.join(', ')}` })
+  @IsOptional()
+  businessType?: BusinessType;
+
+  @ApiPropertyOptional({ example: 'Str0ngP@ss!', description: 'Initial admin password for the POS system (min 8 chars)' })
+  @IsString()
+  @MinLength(8, { message: 'adminPassword must be at least 8 characters' })
+  @IsOptional()
+  adminPassword?: string;
+
+  @ApiPropertyOptional({ example: 'Ahmed Ali', description: 'Full name of the first admin user in the POS' })
+  @IsString()
+  @MaxLength(255)
+  @IsOptional()
+  adminFullName?: string;
 }
 
 export class UpdateTenantDto {

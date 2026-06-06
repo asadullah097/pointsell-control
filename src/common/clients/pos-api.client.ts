@@ -83,6 +83,43 @@ export class PosApiClient {
     return this.delete(`admin/tenants/${id}`);
   }
 
+  // ── Tenant provisioning (calls POST /api/auth/register-tenant on POS) ─────
+
+  async provisionTenant(body: {
+    businessName: string;
+    slug: string;
+    businessType: string;
+    email: string;
+    password: string;
+    fullName?: string;
+    plan?: string;
+  }): Promise<{ tenant: any; user: any; seed: any }> {
+    if (!this.isConfigured) {
+      throw new InternalServerErrorException(
+        'CLOUD_POS_API_URL / CONTROL_PANEL_API_KEY not configured — cannot provision POS tenant',
+      );
+    }
+
+    const url = `${this.baseUrl}/v1/auth/register-tenant`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Control-Panel-Key': this.apiKey!,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      this.logger.error(`POS provision ${url} → ${res.status}: ${JSON.stringify(data)}`);
+      throw new InternalServerErrorException(
+        (data as any)?.message ?? `POS provision error ${res.status}`,
+      );
+    }
+    return (data as any)?.data ?? data;
+  }
+
   // ── Metrics ───────────────────────────────────────────────────────────────
 
   getTenantMetrics(id: string): Promise<PosTenantMetrics> {

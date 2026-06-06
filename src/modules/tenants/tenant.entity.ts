@@ -42,6 +42,10 @@ export class Tenant {
   @Column({ nullable: true })
   notes: string;
 
+  @ApiPropertyOptional({ example: 'alfarooq-pharmacy', description: 'Slug of the linked tenant in the POS backend (set after provisioning)' })
+  @Column({ nullable: true, unique: true })
+  posSlug: string | null;
+
   @ApiPropertyOptional({ example: '1.2.0', description: 'Last POS version seen via heartbeat' })
   @Column({ nullable: true })
   lastSeenVersion: string;
