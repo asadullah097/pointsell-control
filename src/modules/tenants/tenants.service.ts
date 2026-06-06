@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant } from './tenant.entity';
@@ -14,6 +14,9 @@ export class TenantsService {
   ) {}
 
   async create(dto: CreateTenantDto): Promise<{ tenant: Tenant; license?: License }> {
+    const exists = await this.repo.findOneBy({ businessName: dto.businessName });
+    if (exists) throw new ConflictException(`Business "${dto.businessName}" is already registered.`);
+
     const tenant = await this.repo.save(this.repo.create({
       businessName: dto.businessName,
       email: dto.email,
