@@ -98,6 +98,11 @@ export class UpdateTenantDto {
   @IsOptional()
   businessName?: string;
 
+  @ApiPropertyOptional({ enum: BUSINESS_TYPES, example: 'pharmacy' })
+  @IsIn(BUSINESS_TYPES, { message: `businessType must be one of: ${BUSINESS_TYPES.join(', ')}` })
+  @IsOptional()
+  businessType?: BusinessType;
+
   @ApiPropertyOptional({ example: 'newemail@shop.com' })
   @IsEmail()
   @IsOptional()

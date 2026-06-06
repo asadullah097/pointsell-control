@@ -221,6 +221,7 @@ export default function TenantsPage() {
           <thead>
             <tr style={styles.thead}>
               <th style={styles.th}>Business</th>
+              <th style={styles.th}>POS Slug</th>
               <th style={styles.th}>Email</th>
               <th style={styles.th}>Plan</th>
               <th style={styles.th}>Status</th>
@@ -235,7 +236,12 @@ export default function TenantsPage() {
                   onClick={() => navigate(`/tenants/${t.id}`)}>
                   {t.businessName}
                 </td>
-                <td style={styles.td}>{t.email ?? '—'}</td>
+                <td style={styles.td}>
+                  {t.slug
+                    ? <span style={styles.slugBadge}>{t.slug}</span>
+                    : <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>}
+                </td>
+                <td style={styles.td}>{t.email ?? t.ownerEmail ?? '—'}</td>
                 <td style={styles.td}>{t.plan}</td>
                 <td style={styles.td}>
                   <span style={{ ...styles.badge, background: STATUS_COLOR[t.status] + '22', color: STATUS_COLOR[t.status] }}>
@@ -278,4 +284,5 @@ const styles: Record<string, React.CSSProperties> = {
   td: { padding: '14px 16px', fontSize: 14, color: '#1e293b' },
   badge: { padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 },
   actionBtn: { padding: '5px 12px', border: '1px solid #e2e8f0', borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 500, marginRight: 6 },
+  slugBadge: { fontFamily: 'monospace', fontSize: 12, background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 6, border: '1px solid #bfdbfe' },
 };

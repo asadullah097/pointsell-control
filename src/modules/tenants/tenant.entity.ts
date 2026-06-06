@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
-export type TenantStatus = 'active' | 'suspended' | 'trial' | 'expired';
-export type TenantPlan   = 'starter' | 'pro' | 'enterprise';
+export type TenantStatus   = 'active' | 'suspended' | 'trial' | 'expired';
+export type TenantPlan     = 'starter' | 'pro' | 'enterprise';
+export type BusinessType   = 'retail' | 'wholesale' | 'hybrid' | 'pharmacy' | 'restaurant' | 'service';
 
 @Entity('tenants')
 export class Tenant {
@@ -37,6 +38,14 @@ export class Tenant {
   @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true })
   @Column({ type: 'timestamp', nullable: true })
   subscriptionEndsAt: Date | null;
+
+  @ApiPropertyOptional({ enum: ['retail', 'wholesale', 'hybrid', 'pharmacy', 'restaurant', 'service'] })
+  @Column({
+    type: 'enum',
+    enum: ['retail', 'wholesale', 'hybrid', 'pharmacy', 'restaurant', 'service'],
+    nullable: true,
+  })
+  businessType: BusinessType | null;
 
   @ApiPropertyOptional({ example: 'Referred by Ahmed' })
   @Column({ nullable: true })

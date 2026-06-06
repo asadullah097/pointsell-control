@@ -73,7 +73,14 @@ export default function TenantDetailPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <h2 style={styles.heading}>{tenant.businessName}</h2>
-          <p style={{ color: '#64748b', fontSize: 14 }}>{tenant.email ?? ''} · {tenant.phone ?? ''}</p>
+          <p style={{ color: '#64748b', fontSize: 14 }}>
+            {[tenant.email, tenant.phone].filter(Boolean).join(' · ')}
+            {tenant.posSlug && (
+              <span style={{ marginLeft: 8, fontFamily: 'monospace', fontSize: 12, background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 6, border: '1px solid #bfdbfe' }}>
+                {tenant.posSlug}
+              </span>
+            )}
+          </p>
         </div>
         <span style={{ ...styles.badge, background: STATUS_COLOR[tenant.status] + '22', color: STATUS_COLOR[tenant.status] }}>
           {tenant.status}
@@ -84,12 +91,34 @@ export default function TenantDetailPage() {
 
       {/* Tenant info cards */}
       <div style={styles.infoGrid}>
-        {[['Plan', tenant.plan], ['Last Version', tenant.lastSeenVersion ?? '—'], ['Last Heartbeat', tenant.lastHeartbeatAt ? new Date(tenant.lastHeartbeatAt).toLocaleString() : 'Never']].map(([k, v]) => (
-          <div key={k} style={styles.infoCard}>
-            <div style={styles.infoLabel}>{k}</div>
-            <div style={styles.infoVal}>{v}</div>
+        <div style={styles.infoCard}>
+          <div style={styles.infoLabel}>Plan</div>
+          <div style={styles.infoVal}>{tenant.plan}</div>
+        </div>
+        <div style={styles.infoCard}>
+          <div style={styles.infoLabel}>Business Type</div>
+          <div style={styles.infoVal}>
+            {tenant.businessType
+              ? <span style={{ textTransform: 'capitalize' }}>{tenant.businessType}</span>
+              : <span style={{ color: '#94a3b8' }}>—</span>}
           </div>
-        ))}
+        </div>
+        <div style={styles.infoCard}>
+          <div style={styles.infoLabel}>POS Slug</div>
+          <div style={styles.infoVal}>
+            {tenant.posSlug
+              ? <span style={{ fontFamily: 'monospace', fontSize: 14 }}>{tenant.posSlug}</span>
+              : <span style={{ color: '#94a3b8' }}>Not provisioned</span>}
+          </div>
+        </div>
+        <div style={styles.infoCard}>
+          <div style={styles.infoLabel}>Last Version</div>
+          <div style={styles.infoVal}>{tenant.lastSeenVersion ?? '—'}</div>
+        </div>
+        <div style={styles.infoCard}>
+          <div style={styles.infoLabel}>Last Heartbeat</div>
+          <div style={styles.infoVal}>{tenant.lastHeartbeatAt ? new Date(tenant.lastHeartbeatAt).toLocaleString() : 'Never'}</div>
+        </div>
       </div>
 
       {/* Licenses section */}
@@ -215,7 +244,7 @@ const styles: Record<string, React.CSSProperties> = {
   backBtn: { background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 14, marginBottom: 16, padding: 0 },
   primaryBtn: { padding: '10px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   error: { background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16 },
-  infoGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 },
+  infoGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 },
   infoCard: { background: '#fff', padding: '16px 20px', borderRadius: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.06)' },
   infoLabel: { fontSize: 12, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 },
   infoVal: { fontSize: 16, fontWeight: 600, color: '#1e293b', marginTop: 4 },

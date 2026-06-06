@@ -27,6 +27,7 @@ export class TenantsService {
       phone: dto.phone,
       plan: dto.plan ?? 'starter',
       notes: dto.notes,
+      businessType: dto.businessType ?? null,
       status: 'trial',
       posSlug: null,
     }));
