@@ -1,0 +1,64 @@
+const BASE = '/api';
+
+function getToken() {
+  return localStorage.getItem('token') ?? '';
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+    throw new Error('Unauthorized');
+  }
+  if (res.status === 204) return undefined as T;
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as any)?.message ?? `HTTP ${res.status}`);
+  return data as T;
+}
+
+export const api = {
+  // Auth
+  login: (email: string, password: string) =>
+    request<{ access_token: string }>('POST', '/auth/login', { email, password }),
+
+  // Dashboard
+  stats: () => request<any>('GET', '/dashboard/stats'),
+
+  // Tenants
+  listTenants: () => request<any[]>('GET', '/tenants'),
+  createTenant: (body: any) => request<any>('POST', '/tenants', body),
+  updateTenant: (id: string, body: any) => request<any>('PATCH', `/tenants/${id}`, body),
+  suspendTenant: (id: string) => request<any>('POST', `/tenants/${id}/suspend`),
+  activateTenant: (id: string) => request<any>('POST', `/tenants/${id}/activate`),
+  deleteTenant: (id: string) => request<void>('DELETE', `/tenants/${id}`),
+  getTenantLicenses: (tenantId: string) => request<any[]>('GET', `/licenses/tenant/${tenantId}`),
+  getMetrics: (id: string) => request<any>('GET', `/tenants/${id}/metrics`),
+
+  // Licenses
+  createLicense: (body: any) => request<any>('POST', '/licenses', body),
+  revokeLicense: (id: string) => request<void>('DELETE', `/licenses/${id}`),
+  generateOfflineFile: (id: string, fingerprint: string, businessName: string) =>
+    request<any>('POST', `/licenses/${id}/offline-file`, { fingerprint, businessName }),
+
+  // Releases
+  listReleases: () => request<any[]>('GET', '/releases'),
+  createRelease: (body: any) => request<any>('POST', '/releases', body),
+  publishRelease: (id: string) => request<any>('POST', `/releases/${id}/publish`),
+  unpublishRelease: (id: string) => request<any>('POST', `/releases/${id}/unpublish`),
+  deleteRelease: (id: string) => request<void>('DELETE', `/releases/${id}`),
+
+  // Admins
+  listAdmins: () => request<any[]>('GET', '/auth/admins'),
+  createAdmin: (body: any) => request<any>('POST', '/auth/admins', body),
+  deleteAdmin: (id: string) => request<void>('DELETE', `/auth/admins/${id}`),
+};

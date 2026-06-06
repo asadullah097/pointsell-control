@@ -1,6 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsEmail, IsEnum, IsObject, IsOptional, IsString, MinLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { TenantPlan, TenantStatus } from '../tenant.entity';
+
+export class AutoLicenseDto {
+  @ApiPropertyOptional({ enum: ['online', 'offline'], default: 'online' })
+  @IsEnum(['online', 'offline'])
+  @IsOptional()
+  mode?: 'online' | 'offline';
+
+  @ApiProperty({ example: '2027-01-01', description: 'License expiry date (ISO 8601)' })
+  @IsDateString()
+  expiresAt: string;
+
+  @ApiPropertyOptional({ example: { maxLocations: 1, restaurantMode: false, pharmacyMode: false, multiRegister: false } })
+  @IsObject()
+  @IsOptional()
+  features?: Record<string, unknown>;
+}
 
 export class CreateTenantDto {
   @ApiProperty({ example: 'Al-Farooq Pharmacy', description: 'Unique business name' })
@@ -27,6 +44,15 @@ export class CreateTenantDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description: 'When provided, automatically issues a license for this business after creation.',
+    type: AutoLicenseDto,
+  })
+  @ValidateNested()
+  @Type(() => AutoLicenseDto)
+  @IsOptional()
+  autoIssueLicense?: AutoLicenseDto;
 }
 
 export class UpdateTenantDto {

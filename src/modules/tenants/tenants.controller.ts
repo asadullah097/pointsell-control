@@ -23,9 +23,11 @@ export class TenantsController {
   ) {}
 
   @Post()
-  @ApiOperation({ summary: 'Register a new client (local) or provision in cloud POS' })
+  @ApiOperation({
+    summary: 'Register a business',
+    description: 'Creates the tenant record. Pass `autoIssueLicense` to atomically issue a license — the response will include the `licenseKey` to give to the client.',
+  })
   create(@Body() dto: CreateTenantDto) {
-    // Local installs: tracked in control-panel DB only
     return this.tenantsService.create(dto);
   }
 

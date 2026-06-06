@@ -85,4 +85,27 @@ export class LicenseController {
   heartbeat(@Body() dto: HeartbeatDto) {
     return this.licenseService.heartbeat(dto.licenseId, dto.tenantId, dto.version);
   }
+
+  /**
+   * Offline license generation — admin provides the client machine fingerprint
+   * (obtained via GET /v1/license/fingerprint on the client machine) and gets
+   * back a signed license file to deliver to the client out-of-band (USB, email).
+   */
+  @Post(':id/offline-file')
+  @UseGuards(AdminGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Generate a signed offline license file',
+    description:
+      'Client runs `GET /v1/license/fingerprint` on their machine and sends you the fingerprint. ' +
+      'Paste it here — the response is the license.key file content to deliver to them.',
+  })
+  @ApiOkResponse({ schema: { example: { licenseFile: { data: {}, signature: 'base64url...' } } } })
+  async generateOfflineFile(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { fingerprint: string; businessName: string },
+  ) {
+    return this.licenseService.generateOfflineFileById(id, body.fingerprint, body.businessName);
+  }
 }

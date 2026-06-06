@@ -3,15 +3,35 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant } from './tenant.entity';
 import { CreateTenantDto, UpdateTenantDto } from './dto';
+import { LicenseService } from '../licenses/license.service';
+import { License } from '../licenses/license.entity';
 
 @Injectable()
 export class TenantsService {
   constructor(
     @InjectRepository(Tenant) private readonly repo: Repository<Tenant>,
+    private readonly licenseService: LicenseService,
   ) {}
 
-  create(dto: CreateTenantDto): Promise<Tenant> {
-    return this.repo.save(this.repo.create(dto));
+  async create(dto: CreateTenantDto): Promise<{ tenant: Tenant; license?: License }> {
+    const tenant = await this.repo.save(this.repo.create({
+      businessName: dto.businessName,
+      email: dto.email,
+      phone: dto.phone,
+      plan: dto.plan ?? 'starter',
+      notes: dto.notes,
+      status: 'trial',
+    }));
+
+    if (!dto.autoIssueLicense) return { tenant };
+
+    const license = await this.licenseService.create(
+      tenant.id,
+      dto.autoIssueLicense.mode ?? 'online',
+      new Date(dto.autoIssueLicense.expiresAt),
+      dto.autoIssueLicense.features ?? { maxLocations: 1, restaurantMode: false, pharmacyMode: false, multiRegister: false },
+    );
+    return { tenant, license };
   }
 
   findAll(): Promise<Tenant[]> {

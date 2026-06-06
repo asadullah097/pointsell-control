@@ -141,6 +141,38 @@ export class LicenseService {
     });
   }
 
+  // ── Offline file by license id ────────────────────────────────────────────
+
+  async generateOfflineFileById(
+    licenseId: string,
+    fingerprint: string,
+    businessName: string,
+  ): Promise<{ licenseFile: object }> {
+    const license = await this.licenseRepo.findOne({
+      where: { id: licenseId },
+      relations: ['tenant'],
+    });
+    if (!license) throw new NotFoundException('License not found.');
+    if (license.status === 'revoked') throw new BadRequestException('License is revoked.');
+
+    // Bind fingerprint permanently on first offline generation
+    if (!license.machineFingerprint) {
+      license.machineFingerprint = fingerprint;
+      await this.licenseRepo.save(license);
+    } else if (license.machineFingerprint !== fingerprint) {
+      throw new BadRequestException(
+        'This license is already bound to a different machine fingerprint. ' +
+          'Contact support to transfer.',
+      );
+    }
+
+    const licenseFile = this.generateOfflineLicenseFile(
+      license,
+      businessName || license.tenant.businessName,
+    );
+    return { licenseFile };
+  }
+
   // ── List / revoke ─────────────────────────────────────────────────────────
 
   async findAllForTenant(tenantId: string): Promise<License[]> {

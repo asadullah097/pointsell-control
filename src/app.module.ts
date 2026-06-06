@@ -3,24 +3,42 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+
 import { Tenant } from './modules/tenants/tenant.entity';
 import { License } from './modules/licenses/license.entity';
 import { Release } from './modules/releases/release.entity';
-import { LicenseController } from './modules/licenses/license.controller';
-import { LicenseService } from './modules/licenses/license.service';
-import { ReleasesController } from './modules/releases/releases.controller';
-import { TenantsController } from './modules/tenants/tenants.controller';
-import { TenantsService } from './modules/tenants/tenants.service';
-import { AuthController } from './modules/auth/auth.controller';
 import { Admin } from './modules/auth/admin.entity';
+
+import { AuthController } from './modules/auth/auth.controller';
+import { AdminsController } from './modules/auth/admins.controller';
+import { TenantsController } from './modules/tenants/tenants.controller';
+import { LicenseController } from './modules/licenses/license.controller';
+import { ReleasesController } from './modules/releases/releases.controller';
+import { DashboardController } from './modules/dashboard/dashboard.controller';
+import { HealthController } from './modules/health/health.controller';
+
+import { LicenseService } from './modules/licenses/license.service';
+import { LicenseExpiryService } from './modules/licenses/license-expiry.service';
+import { TenantsService } from './modules/tenants/tenants.service';
 import { AdminSeeder } from './modules/auth/admin.seeder';
 import { AdminGuard } from './common/guards/admin.guard';
 import { PosApiClient } from './common/clients/pos-api.client';
+
+const publicDir = join(__dirname, '..', 'public');
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+
+    // Serve the React admin UI from /public
+    ServeStaticModule.forRoot({
+      rootPath: publicDir,
+      exclude: ['/api/*', '/health'],
+      serveStaticOptions: { index: 'index.html', fallthrough: true },
+    }),
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -49,7 +67,22 @@ import { PosApiClient } from './common/clients/pos-api.client';
       }),
     }),
   ],
-  controllers: [AuthController, TenantsController, LicenseController, ReleasesController],
-  providers: [LicenseService, TenantsService, AdminSeeder, AdminGuard, PosApiClient],
+  controllers: [
+    HealthController,
+    AuthController,
+    AdminsController,
+    TenantsController,
+    LicenseController,
+    ReleasesController,
+    DashboardController,
+  ],
+  providers: [
+    LicenseService,
+    LicenseExpiryService,
+    TenantsService,
+    AdminSeeder,
+    AdminGuard,
+    PosApiClient,
+  ],
 })
 export class AppModule {}
