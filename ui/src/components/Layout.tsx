@@ -5,6 +5,7 @@ const nav = [
   { to: '/tenants', label: 'Businesses' },
   { to: '/releases', label: 'Releases' },
   { to: '/admins', label: 'Admins' },
+  { to: '/install-guide', label: 'Install Guide' },
 ];
 
 export default function Layout() {

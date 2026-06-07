@@ -5,6 +5,7 @@ import TenantsPage from './pages/Tenants';
 import TenantDetailPage from './pages/TenantDetail';
 import ReleasesPage from './pages/Releases';
 import AdminsPage from './pages/Admins';
+import InstallGuidePage from './pages/InstallGuide';
 import Layout from './components/Layout';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="tenants/:id" element={<TenantDetailPage />} />
           <Route path="releases" element={<ReleasesPage />} />
           <Route path="admins" element={<AdminsPage />} />
+          <Route path="install-guide" element={<InstallGuidePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
