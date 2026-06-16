@@ -20,6 +20,10 @@ export class TenantsService {
   async create(dto: CreateTenantDto): Promise<{ tenant: Tenant; license?: License; posProvision?: any }> {
     const exists = await this.repo.findOneBy({ businessName: dto.businessName });
     if (exists) throw new ConflictException(`Business "${dto.businessName}" is already registered.`);
+    if (dto.email) {
+      const emailExists = await this.repo.findOneBy({ email: dto.email });
+      if (emailExists) throw new ConflictException(`Email "${dto.email}" is already used by tenant "${emailExists.businessName}".`);
+    }
 
     const tenant = await this.repo.save(this.repo.create({
       businessName: dto.businessName,
