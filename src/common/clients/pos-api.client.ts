@@ -79,6 +79,10 @@ export class PosApiClient {
     return this.post<PosTenant>(`admin/tenants/${id}/provision`);
   }
 
+  reseedTenant(id: string, businessType?: string): Promise<{ seeded: string }> {
+    return this.post<{ seeded: string }>(`admin/tenants/${id}/reseed`, businessType ? { businessType } : {});
+  }
+
   deleteTenant(id: string): Promise<void> {
     return this.delete(`admin/tenants/${id}`);
   }

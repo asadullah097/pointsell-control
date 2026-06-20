@@ -80,6 +80,14 @@ export class TenantsController {
     return { message: 'Schema provisioning is only available in cloud mode' };
   }
 
+  @Post(':id/reseed')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Re-run idempotent seeders for a tenant (cloud only)' })
+  reseed(@Param('id', ParseUUIDPipe) id: string, @Body() body: { businessType?: string }) {
+    if (this.posApi.isConfigured) return this.posApi.reseedTenant(id, body?.businessType);
+    return { message: 'Reseed is only available in cloud mode' };
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'Deleted' })

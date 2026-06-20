@@ -19,6 +19,11 @@ export default function TenantDetailPage() {
   const [licForm, setLicForm] = useState({ mode: 'online', expiresAt: '', features: '{}' });
   const [offlineForm, setOfflineForm] = useState({ fingerprint: '', businessName: '' });
   const [saving, setSaving] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
+  const [provisionMsg, setProvisionMsg] = useState('');
+  const [reseeding, setReseeding] = useState(false);
+  const [reseedMsg, setReseedMsg] = useState('');
+  const [reseedType, setReseedType] = useState('');
 
   useEffect(() => { loadAll(); }, [id]);
 
@@ -55,6 +60,37 @@ export default function TenantDetailPage() {
     catch (e: any) { setError(e.message); }
   }
 
+  async function handleRunMigrations() {
+    if (!confirm(`Run migrations for "${tenant.businessName}"?\n\nThis provisions the schema and runs any pending migrations. Safe to run multiple times.`)) return;
+    setProvisioning(true);
+    setProvisionMsg('');
+    try {
+      await api.reprovisionTenant(id!);
+      await loadAll();
+      setProvisionMsg('Migrations completed successfully.');
+    } catch (e: any) {
+      setProvisionMsg(`Error: ${e.message}`);
+    } finally {
+      setProvisioning(false);
+    }
+  }
+
+  async function handleReseed() {
+    const type = reseedType || tenant.businessType;
+    if (!type) { setReseedMsg('Error: set a business type first.'); return; }
+    if (!confirm(`Re-seed "${tenant.businessName}" as business type "${type}"?\n\nThis re-runs categories, feature flags, and menu/product seeds. Safe to run multiple times.`)) return;
+    setReseeding(true);
+    setReseedMsg('');
+    try {
+      const res = await api.reseedTenant(tenant.posId ?? tenant.id, type);
+      setReseedMsg(`Seeder ran successfully (type: ${res?.seeded ?? type}).`);
+    } catch (e: any) {
+      setReseedMsg(`Error: ${e.message}`);
+    } finally {
+      setReseeding(false);
+    }
+  }
+
   async function handleOfflineGenerate(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -82,12 +118,27 @@ export default function TenantDetailPage() {
             )}
           </p>
         </div>
-        <span style={{ ...styles.badge, background: STATUS_COLOR[tenant.status] + '22', color: STATUS_COLOR[tenant.status] }}>
-          {tenant.status}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ ...styles.badge, background: STATUS_COLOR[tenant.status] + '22', color: STATUS_COLOR[tenant.status] }}>
+            {tenant.status}
+          </span>
+          <button
+            onClick={handleRunMigrations}
+            disabled={provisioning}
+            style={{ ...styles.primaryBtn, background: provisioning ? '#94a3b8' : '#0f172a', fontSize: 13, padding: '7px 14px' }}
+            title="Provision schema and run pending migrations"
+          >
+            {provisioning ? 'Running…' : '⚙ Run Migrations'}
+          </button>
+        </div>
       </div>
 
       {error && <div style={styles.error}>{error}</div>}
+      {provisionMsg && (
+        <div style={{ ...styles.error, background: provisionMsg.startsWith('Error') ? '#fef2f2' : '#f0fdf4', borderColor: provisionMsg.startsWith('Error') ? '#fecaca' : '#86efac', color: provisionMsg.startsWith('Error') ? '#dc2626' : '#166534', marginBottom: 16 }}>
+          {provisionMsg}
+        </div>
+      )}
 
       {/* Tenant info cards */}
       <div style={styles.infoGrid}>
@@ -119,6 +170,44 @@ export default function TenantDetailPage() {
           <div style={styles.infoLabel}>Last Heartbeat</div>
           <div style={styles.infoVal}>{tenant.lastHeartbeatAt ? new Date(tenant.lastHeartbeatAt).toLocaleString() : 'Never'}</div>
         </div>
+      </div>
+
+      {/* Re-seed section */}
+      <div style={{ ...styles.card, margin: '24px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', margin: 0 }}>Re-run Seeders</p>
+            <p style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+              Re-seeds categories, feature flags, and menu/product items. Safe to run multiple times.
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <select
+              value={reseedType || tenant.businessType || ''}
+              onChange={e => setReseedType(e.target.value)}
+              style={{ ...styles.input, width: 'auto', height: 36, padding: '0 10px', fontSize: 13 }}
+            >
+              <option value="retail">Retail</option>
+              <option value="wholesale">Wholesale</option>
+              <option value="restaurant">Restaurant / Cafe</option>
+              <option value="pharmacy">Pharmacy</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="service">Service</option>
+            </select>
+            <button
+              onClick={handleReseed}
+              disabled={reseeding}
+              style={{ ...styles.primaryBtn, background: reseeding ? '#94a3b8' : '#7c3aed', fontSize: 13, padding: '7px 14px', whiteSpace: 'nowrap' }}
+            >
+              {reseeding ? 'Seeding…' : '🌱 Re-seed'}
+            </button>
+          </div>
+        </div>
+        {reseedMsg && (
+          <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, fontSize: 13, background: reseedMsg.startsWith('Error') ? '#fef2f2' : '#f0fdf4', color: reseedMsg.startsWith('Error') ? '#dc2626' : '#166534', border: `1px solid ${reseedMsg.startsWith('Error') ? '#fecaca' : '#86efac'}` }}>
+            {reseedMsg}
+          </div>
+        )}
       </div>
 
       {/* Licenses section */}
