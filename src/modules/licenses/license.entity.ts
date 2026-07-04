@@ -2,11 +2,13 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Tenant } from '../tenants/tenant.entity';
+import { Plan } from '../plans/plan.entity';
 
 export type LicenseMode   = 'online' | 'offline';
 export type LicenseStatus = 'active' | 'revoked' | 'expired';
@@ -21,6 +23,14 @@ export class License {
 
   @Column()
   tenantId: string;
+
+  /** The plan this license's `features.maxUsers/maxLocations` was snapshotted from at issue/renew time. */
+  @ManyToOne(() => Plan, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'planId' })
+  plan: Plan | null;
+
+  @Column({ nullable: true })
+  planId: string | null;
 
   /** The human-readable key the client enters to activate (e.g. XXXX-XXXX-XXXX-XXXX) */
   @Column({ unique: true })

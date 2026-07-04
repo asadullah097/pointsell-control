@@ -45,12 +45,25 @@ export const api = {
   deleteTenant: (id: string) => request<void>('DELETE', `/tenants/${id}`),
   getTenantLicenses: (tenantId: string) => request<any[]>('GET', `/licenses/tenant/${tenantId}`),
   getMetrics: (id: string) => request<any>('GET', `/tenants/${id}/metrics`),
+  listPlanRequests: (id: string) => request<any[]>('GET', `/tenants/${id}/plan-requests`),
+  resolvePlanRequest: (id: string, requestId: string, body: { status: 'approved' | 'rejected'; adminResponse?: string }) =>
+    request<any>('PATCH', `/tenants/${id}/plan-requests/${requestId}`, body),
 
   // Licenses
   createLicense: (body: any) => request<any>('POST', '/licenses', body),
   revokeLicense: (id: string) => request<void>('DELETE', `/licenses/${id}`),
   generateOfflineFile: (id: string, fingerprint: string, businessName: string) =>
     request<any>('POST', `/licenses/${id}/offline-file`, { fingerprint, businessName }),
+  renewLicense: (id: string, durationDays?: number) =>
+    request<any>('PATCH', `/licenses/${id}/renew`, durationDays ? { durationDays } : {}),
+  changeLicensePlan: (id: string, planId: string, extend?: boolean) =>
+    request<any>('PATCH', `/licenses/${id}/change-plan`, { planId, extend }),
+
+  // Plans
+  listPlans: () => request<any[]>('GET', '/plans'),
+  createPlan: (body: any) => request<any>('POST', '/plans', body),
+  updatePlan: (id: string, body: any) => request<any>('PATCH', `/plans/${id}`, body),
+  deletePlan: (id: string) => request<{ softHidden: boolean }>('DELETE', `/plans/${id}`),
 
   // Releases
   listReleases: () => request<any[]>('GET', '/releases'),

@@ -5,6 +5,7 @@ import { Tenant } from '../modules/tenants/tenant.entity';
 import { License } from '../modules/licenses/license.entity';
 import { Release } from '../modules/releases/release.entity';
 import { Admin } from '../modules/auth/admin.entity';
+import { Plan } from '../modules/plans/plan.entity';
 
 dotenv.config();
 
@@ -15,7 +16,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USER ?? 'postgres',
   password: process.env.DB_PASS,
   database: process.env.DB_NAME ?? 'pointsell_control',
-  entities: [Tenant, License, Release, Admin],
+  entities: [Tenant, License, Release, Admin, Plan],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
 });

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 const nav = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/tenants', label: 'Businesses' },
+  { to: '/plans', label: 'Plans' },
   { to: '/releases', label: 'Releases' },
   { to: '/admins', label: 'Admins' },
   { to: '/install-guide', label: 'Install Guide' },

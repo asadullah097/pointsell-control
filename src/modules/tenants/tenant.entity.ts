@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Plan } from '../plans/plan.entity';
 
 export type TenantStatus   = 'active' | 'suspended' | 'trial' | 'expired';
+/** @deprecated display-only legacy label — real limits come from `plan`/`planId` (see Plan entity) */
 export type TenantPlan     = 'starter' | 'pro' | 'enterprise';
 export type BusinessType   = 'retail' | 'wholesale' | 'hybrid' | 'pharmacy' | 'restaurant' | 'service';
 
@@ -27,14 +29,30 @@ export class Tenant {
   @Column({ type: 'enum', enum: ['active', 'suspended', 'trial', 'expired'], default: 'trial' })
   status: TenantStatus;
 
+  /** @deprecated legacy display label, kept for backward compatibility — see `plan`/`planId` for the real entitlement */
   @ApiProperty({ enum: ['starter', 'pro', 'enterprise'], default: 'starter' })
   @Column({ type: 'enum', enum: ['starter', 'pro', 'enterprise'], default: 'starter' })
-  plan: TenantPlan;
+  legacyPlan: TenantPlan;
+
+  /** The plan catalog entry actually driving this tenant's seat/location limits. */
+  @ApiPropertyOptional({ type: () => Plan, nullable: true })
+  @ManyToOne(() => Plan, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'planId' })
+  plan: Plan | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @Column({ nullable: true })
+  planId: string | null;
 
   @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true })
   @Column({ type: 'timestamp', nullable: true })
   trialEndsAt: Date | null;
 
+  /**
+   * Denormalized read-cache of the current entitlement expiry, mirrored from
+   * the tenant's active License.expiresAt whenever a license is created/renewed.
+   * Lets the Tenants list show expiry without an extra join.
+   */
   @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true })
   @Column({ type: 'timestamp', nullable: true })
   subscriptionEndsAt: Date | null;

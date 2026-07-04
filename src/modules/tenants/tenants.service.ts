@@ -5,6 +5,7 @@ import { Tenant } from './tenant.entity';
 import { CreateTenantDto, UpdateTenantDto } from './dto';
 import { LicenseService } from '../licenses/license.service';
 import { License } from '../licenses/license.entity';
+import { PlansService } from '../plans/plans.service';
 import { PosApiClient } from '../../common/clients/pos-api.client';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class TenantsService {
   constructor(
     @InjectRepository(Tenant) private readonly repo: Repository<Tenant>,
     private readonly licenseService: LicenseService,
+    private readonly plansService: PlansService,
     private readonly posApiClient: PosApiClient,
   ) {}
 
@@ -29,7 +31,8 @@ export class TenantsService {
       businessName: dto.businessName,
       email: dto.email,
       phone: dto.phone,
-      plan: dto.plan ?? 'starter',
+      legacyPlan: dto.plan ?? 'starter',
+      planId: dto.planId ?? null,
       notes: dto.notes,
       businessType: dto.businessType ?? null,
       status: 'trial',
@@ -72,28 +75,42 @@ export class TenantsService {
 
     if (!dto.autoIssueLicense) return { tenant, posProvision };
 
+    let features = dto.autoIssueLicense.features ?? {};
+    let expiresAt = dto.autoIssueLicense.expiresAt ? new Date(dto.autoIssueLicense.expiresAt) : undefined;
+
+    if (dto.planId) {
+      const plan = await this.plansService.findOne(dto.planId);
+      features = { maxUsers: plan.maxUsers, maxLocations: plan.maxLocations, ...features };
+      if (!expiresAt) expiresAt = new Date(Date.now() + plan.durationDays * 86_400_000);
+    } else {
+      features = { maxLocations: 1, maxUsers: 1, restaurantMode: false, pharmacyMode: false, multiRegister: false, ...features };
+      if (!expiresAt) expiresAt = new Date(Date.now() + 30 * 86_400_000);
+    }
+
     const license = await this.licenseService.create(
       tenant.id,
       dto.autoIssueLicense.mode ?? 'online',
-      new Date(dto.autoIssueLicense.expiresAt),
-      dto.autoIssueLicense.features ?? { maxLocations: 1, restaurantMode: false, pharmacyMode: false, multiRegister: false },
+      expiresAt,
+      features,
+      dto.planId,
     );
     return { tenant, license, posProvision };
   }
 
   findAll(): Promise<Tenant[]> {
-    return this.repo.find({ order: { createdAt: 'DESC' } });
+    return this.repo.find({ relations: ['plan'], order: { createdAt: 'DESC' } });
   }
 
   async findOne(id: string): Promise<Tenant> {
-    const tenant = await this.repo.findOneBy({ id });
+    const tenant = await this.repo.findOne({ where: { id }, relations: ['plan'] });
     if (!tenant) throw new NotFoundException(`Tenant ${id} not found`);
     return tenant;
   }
 
   async update(id: string, dto: UpdateTenantDto): Promise<Tenant> {
     await this.findOne(id);
-    await this.repo.update(id, dto);
+    const { plan, ...rest } = dto;
+    await this.repo.update(id, { ...rest, ...(plan ? { legacyPlan: plan } : {}) });
     return this.findOne(id);
   }
 

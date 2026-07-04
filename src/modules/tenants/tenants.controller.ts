@@ -1,6 +1,6 @@
 import {
   Body, Controller, Delete, Get, HttpCode,
-  HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseGuards,
+  HttpStatus, NotFoundException, Param, ParseUUIDPipe, Patch, Post, UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth, ApiNoContentResponse, ApiNotFoundResponse,
@@ -111,5 +111,31 @@ export class TenantsController {
   getAllMetrics() {
     if (this.posApi.isConfigured) return this.posApi.getAllMetrics();
     return [];
+  }
+
+  // ── Plan requests (cloud only — proxied by posSlug, not this tenant's own id) ──
+
+  @Get(':id/plan-requests')
+  @ApiOperation({ summary: "List a tenant's pending plan requests raised from the POS (cloud only)" })
+  async listPlanRequests(@Param('id', ParseUUIDPipe) id: string) {
+    if (!this.posApi.isConfigured) return [];
+    const tenant = await this.tenantsService.findOne(id);
+    if (!tenant.posSlug) return [];
+    return this.posApi.listPlanRequests(tenant.posSlug);
+  }
+
+  @Patch(':id/plan-requests/:requestId')
+  @ApiOperation({ summary: 'Approve or reject a plan request (cloud only)' })
+  async resolvePlanRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('requestId') requestId: string,
+    @Body() body: { status: 'approved' | 'rejected'; adminResponse?: string },
+  ) {
+    if (!this.posApi.isConfigured) {
+      return { message: 'Plan requests are only available in cloud mode' };
+    }
+    const tenant = await this.tenantsService.findOne(id);
+    if (!tenant.posSlug) throw new NotFoundException('Tenant has no linked POS slug');
+    return this.posApi.resolvePlanRequest(tenant.posSlug, requestId, body);
   }
 }

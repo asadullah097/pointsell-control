@@ -6,17 +6,27 @@ const STATUS_COLOR: Record<string, string> = {
   active: '#10b981', trial: '#f59e0b', suspended: '#ef4444', expired: '#94a3b8',
 };
 
+/** `plan` is either a Plan object (this repo's own tenants, local mode), a plain
+ * string (proxied from nestjs-pos's own Tenant.plan enum, cloud mode), or absent. */
+function planLabel(t: any): string {
+  if (t.plan && typeof t.plan === 'object') return t.plan.name;
+  if (typeof t.plan === 'string') return t.plan;
+  if (t.legacyPlan) return t.legacyPlan;
+  return '—';
+}
+
 export default function TenantsPage() {
   const navigate = useNavigate();
   const [tenants, setTenants] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     businessName: '', slug: '', businessType: 'retail', adminPassword: '', adminFullName: '',
-    email: '', phone: '', plan: 'starter', notes: '',
-    licenseMode: 'online', licenseExpiresAt: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+    email: '', phone: '', planId: '', notes: '',
+    licenseMode: 'online', licenseExpiresAt: '',
     provisionPos: true,
   });
 
@@ -24,13 +34,22 @@ export default function TenantsPage() {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50);
   }
 
-  useEffect(() => { loadTenants(); }, []);
+  useEffect(() => { loadTenants(); loadPlans(); }, []);
 
   async function loadTenants() {
     setLoading(true);
     try { setTenants(await api.listTenants()); }
     catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
+  }
+
+  async function loadPlans() {
+    try {
+      const all = await api.listPlans();
+      const active = all.filter((p: any) => p.isActive);
+      setPlans(active);
+      if (active.length > 0) setForm(f => ({ ...f, planId: f.planId || active[0].id }));
+    } catch (e: any) { setError(e.message); }
   }
 
   async function handleRegister(e: FormEvent) {
@@ -42,12 +61,11 @@ export default function TenantsPage() {
         businessName: form.businessName,
         email: form.email || undefined,
         phone: form.phone || undefined,
-        plan: form.plan,
+        planId: form.planId || undefined,
         notes: form.notes || undefined,
         autoIssueLicense: {
           mode: form.licenseMode,
-          expiresAt: form.licenseExpiresAt,
-          features: { maxLocations: 1, restaurantMode: false, pharmacyMode: false, multiRegister: false },
+          expiresAt: form.licenseExpiresAt || undefined, // omit → backend defaults to now + plan.durationDays
         },
       };
       if (form.provisionPos) {
@@ -69,7 +87,7 @@ export default function TenantsPage() {
       }
       alert(lines.join('\n'));
       setShowForm(false);
-      setForm({ businessName: '', slug: '', businessType: 'retail', adminPassword: '', adminFullName: '', email: '', phone: '', plan: 'starter', notes: '', licenseMode: 'online', licenseExpiresAt: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().slice(0, 10), provisionPos: true });
+      setForm({ businessName: '', slug: '', businessType: 'retail', adminPassword: '', adminFullName: '', email: '', phone: '', planId: plans[0]?.id ?? '', notes: '', licenseMode: 'online', licenseExpiresAt: '', provisionPos: true });
       await loadTenants();
     } catch (e: any) { setError(e.message); }
     finally { setSaving(false); }
@@ -139,11 +157,13 @@ export default function TenantsPage() {
             </div>
             <div>
               <label style={styles.label}>Plan</label>
-              <select style={styles.input} value={form.plan}
-                onChange={e => setForm(f => ({ ...f, plan: e.target.value }))}>
-                <option value="starter">Starter</option>
-                <option value="pro">Pro</option>
-                <option value="enterprise">Enterprise</option>
+              <select style={styles.input} value={form.planId}
+                onChange={e => setForm(f => ({ ...f, planId: e.target.value }))}>
+                {plans.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.maxUsers === null ? '∞' : p.maxUsers} users, {p.maxLocations === null ? '∞' : p.maxLocations} locations)
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -204,6 +224,7 @@ export default function TenantsPage() {
               <label style={styles.label}>Expires At</label>
               <input style={styles.input} type="date" value={form.licenseExpiresAt}
                 onChange={e => setForm(f => ({ ...f, licenseExpiresAt: e.target.value }))} />
+              <span style={styles.hint}>Leave blank to default to today + the selected plan's duration</span>
             </div>
           </div>
 
@@ -242,7 +263,7 @@ export default function TenantsPage() {
                     : <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>}
                 </td>
                 <td style={styles.td}>{t.email ?? t.ownerEmail ?? '—'}</td>
-                <td style={styles.td}>{t.plan}</td>
+                <td style={styles.td}>{planLabel(t)}</td>
                 <td style={styles.td}>
                   <span style={{ ...styles.badge, background: STATUS_COLOR[t.status] + '22', color: STATUS_COLOR[t.status] }}>
                     {t.status}

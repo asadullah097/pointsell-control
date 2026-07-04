@@ -65,6 +65,20 @@ export class PosApiClient {
     return this.patch<PosTenant>(`admin/tenants/${id}`, body);
   }
 
+  /**
+   * Pushes plan entitlements to nestjs-pos after a license renew/change-plan.
+   * Keyed by slug (not id) — pointsell-control only ever learns a cloud tenant's
+   * posSlug at provisioning time, never its nestjs-pos-side row id.
+   * Best-effort by design: callers should swallow failures rather than fail the
+   * renew/change-plan response, same as the license heartbeat pattern.
+   */
+  updateEntitlements(
+    slug: string,
+    body: { maxUsers: number | null; maxLocations: number | null; expiresAt: string; planKey?: string },
+  ): Promise<PosTenant> {
+    return this.patch<PosTenant>(`admin/tenants/by-slug/${slug}/entitlements`, body);
+  }
+
   // ── Lifecycle actions ─────────────────────────────────────────────────────
 
   suspendTenant(id: string): Promise<PosTenant> {
@@ -132,6 +146,20 @@ export class PosApiClient {
 
   getAllMetrics(): Promise<PosTenantMetrics[]> {
     return this.get<PosTenantMetrics[]>('admin/tenants/metrics/all');
+  }
+
+  // ── Plan requests (keyed by slug — see updateEntitlements' comment) ───────
+
+  listPlanRequests(slug: string): Promise<any[]> {
+    return this.get<any[]>(`admin/tenants/by-slug/${slug}/plan-requests`);
+  }
+
+  resolvePlanRequest(
+    slug: string,
+    requestId: string,
+    body: { status: 'approved' | 'rejected'; adminResponse?: string },
+  ): Promise<any> {
+    return this.patch<any>(`admin/tenants/by-slug/${slug}/plan-requests/${requestId}`, body);
   }
 
   // ── Private HTTP helpers ──────────────────────────────────────────────────

@@ -7,36 +7,67 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { LicenseService } from './license.service';
+import { PlansService } from '../plans/plans.service';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { Public } from '../../common/guards/public.decorator';
 import {
   CreateLicenseDto,
   ActivateLicenseDto,
   HeartbeatDto,
+  RenewLicenseDto,
+  ChangeLicensePlanDto,
 } from './dto';
 
 @ApiTags('Licenses')
 @Controller('api/licenses')
 export class LicenseController {
-  constructor(private readonly licenseService: LicenseService) {}
+  constructor(
+    private readonly licenseService: LicenseService,
+    private readonly plansService: PlansService,
+  ) {}
 
   @Post()
   @UseGuards(AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a license for a tenant (admin only)' })
   @ApiCreatedResponse({ description: 'License created with a generated license key' })
-  create(@Body() dto: CreateLicenseDto) {
+  async create(@Body() dto: CreateLicenseDto) {
+    let features = dto.features ?? {};
+    if (dto.planId) {
+      const plan = await this.plansService.findOne(dto.planId);
+      features = { maxUsers: plan.maxUsers, maxLocations: plan.maxLocations, ...features };
+    }
     return this.licenseService.create(
       dto.tenantId,
       dto.mode,
       new Date(dto.expiresAt),
-      dto.features ?? {},
+      features,
+      dto.planId,
     );
+  }
+
+  @Patch(':id/renew')
+  @UseGuards(AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Extend expiresAt on the existing license (does not create a new row)' })
+  renew(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RenewLicenseDto) {
+    return this.licenseService.renew(id, dto.durationDays);
+  }
+
+  @Patch(':id/change-plan')
+  @UseGuards(AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reassign a license to a different plan, snapshotting its limits' })
+  async changePlan(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeLicensePlanDto) {
+    const plan = await this.plansService.findOne(dto.planId);
+    const extendDays = dto.extend ? plan.durationDays : undefined;
+    return this.licenseService.changePlan(id, dto.planId, { maxUsers: plan.maxUsers, maxLocations: plan.maxLocations }, extendDays);
   }
 
   @Get('tenant/:tenantId')

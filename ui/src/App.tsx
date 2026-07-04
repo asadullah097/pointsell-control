@@ -5,6 +5,7 @@ import TenantsPage from './pages/Tenants';
 import TenantDetailPage from './pages/TenantDetail';
 import ReleasesPage from './pages/Releases';
 import AdminsPage from './pages/Admins';
+import PlansPage from './pages/Plans';
 import InstallGuidePage from './pages/InstallGuide';
 import Layout from './components/Layout';
 
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="tenants" element={<TenantsPage />} />
           <Route path="tenants/:id" element={<TenantDetailPage />} />
+          <Route path="plans" element={<PlansPage />} />
           <Route path="releases" element={<ReleasesPage />} />
           <Route path="admins" element={<AdminsPage />} />
           <Route path="install-guide" element={<InstallGuidePage />} />

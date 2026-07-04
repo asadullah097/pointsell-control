@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsObject, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsObject, IsOptional, IsString, IsUUID, Min, MinLength } from 'class-validator';
 
 export class CreateLicenseDto {
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000', description: 'Tenant UUID to assign this license to' })
@@ -14,6 +14,11 @@ export class CreateLicenseDto {
   @IsDateString()
   expiresAt: string;
 
+  @ApiPropertyOptional({ example: '550e8400-e29b-41d4-a716-446655440000', description: 'Plan catalog id to snapshot maxUsers/maxLocations from' })
+  @IsUUID()
+  @IsOptional()
+  planId?: string;
+
   @ApiPropertyOptional({
     description: 'Feature flags for this license',
     example: { maxLocations: 1, restaurantMode: false, pharmacyMode: true, multiRegister: false },
@@ -21,6 +26,25 @@ export class CreateLicenseDto {
   @IsObject()
   @IsOptional()
   features?: Record<string, unknown>;
+}
+
+export class RenewLicenseDto {
+  @ApiPropertyOptional({ example: 30, description: 'Days to extend by. Defaults to the license\'s plan durationDays, or 30.' })
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  durationDays?: number;
+}
+
+export class ChangeLicensePlanDto {
+  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000', description: 'New plan catalog id' })
+  @IsUUID()
+  planId: string;
+
+  @ApiPropertyOptional({ example: false, description: 'Also extend expiresAt by the new plan\'s durationDays' })
+  @IsBoolean()
+  @IsOptional()
+  extend?: boolean;
 }
 
 export class ActivateLicenseDto {

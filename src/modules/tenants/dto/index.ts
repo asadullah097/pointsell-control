@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsEmail, IsEnum, IsIn, IsObject, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import { IsDateString, IsEmail, IsEnum, IsIn, IsObject, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TenantPlan, TenantStatus } from '../tenant.entity';
 
@@ -12,11 +12,18 @@ export class AutoLicenseDto {
   @IsOptional()
   mode?: 'online' | 'offline';
 
-  @ApiProperty({ example: '2027-01-01', description: 'License expiry date (ISO 8601)' })
+  @ApiPropertyOptional({
+    example: '2027-01-01',
+    description: 'License expiry date (ISO 8601). Defaults to now + the assigned plan\'s durationDays.',
+  })
   @IsDateString()
-  expiresAt: string;
+  @IsOptional()
+  expiresAt?: string;
 
-  @ApiPropertyOptional({ example: { maxLocations: 1, restaurantMode: false, pharmacyMode: false, multiRegister: false } })
+  @ApiPropertyOptional({
+    example: { restaurantMode: false, pharmacyMode: false, multiRegister: false },
+    description: 'maxLocations/maxUsers are normally derived from planId — only set here to override.',
+  })
   @IsObject()
   @IsOptional()
   features?: Record<string, unknown>;
@@ -38,10 +45,19 @@ export class CreateTenantDto {
   @IsOptional()
   phone?: string;
 
+  /** @deprecated legacy display label — pass `planId` instead, it drives the actual license limits */
   @ApiPropertyOptional({ enum: ['starter', 'pro', 'enterprise'], default: 'starter' })
   @IsEnum(['starter', 'pro', 'enterprise'])
   @IsOptional()
   plan?: TenantPlan;
+
+  @ApiPropertyOptional({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Plan catalog id — drives the issued license\'s maxUsers/maxLocations and default expiry.',
+  })
+  @IsUUID()
+  @IsOptional()
+  planId?: string;
 
   @ApiPropertyOptional({ example: 'Referred by Ahmed' })
   @IsString()
@@ -118,6 +134,7 @@ export class UpdateTenantDto {
   @IsOptional()
   status?: TenantStatus;
 
+  /** @deprecated legacy display label only — use PATCH /api/licenses/:id/change-plan to actually change entitlements */
   @ApiPropertyOptional({ enum: ['starter', 'pro', 'enterprise'] })
   @IsEnum(['starter', 'pro', 'enterprise'])
   @IsOptional()

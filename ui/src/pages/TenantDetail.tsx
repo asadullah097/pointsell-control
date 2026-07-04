@@ -7,17 +7,35 @@ const STATUS_COLOR: Record<string, string> = {
   expired: '#94a3b8', revoked: '#ef4444',
 };
 
+/** `plan` is either a Plan object (this repo's own tenants, local mode), a plain
+ * string (proxied from nestjs-pos's own Tenant.plan enum, cloud mode), or absent. */
+function planLabel(t: any): string {
+  if (t.plan && typeof t.plan === 'object') return t.plan.name;
+  if (typeof t.plan === 'string') return t.plan;
+  if (t.legacyPlan) return t.legacyPlan;
+  return '—';
+}
+
+function daysUntil(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
+}
+
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [tenant, setTenant] = useState<any>(null);
   const [licenses, setLicenses] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [planRequests, setPlanRequests] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [showLicForm, setShowLicForm] = useState(false);
   const [showOffline, setShowOffline] = useState<string | null>(null);
   const [offlineResult, setOfflineResult] = useState<string>('');
-  const [licForm, setLicForm] = useState({ mode: 'online', expiresAt: '', features: '{}' });
+  const [licForm, setLicForm] = useState({ mode: 'online', expiresAt: '', planId: '', features: '{}' });
   const [offlineForm, setOfflineForm] = useState({ fingerprint: '', businessName: '' });
+  const [changePlanFor, setChangePlanFor] = useState<string | null>(null);
+  const [changePlanId, setChangePlanId] = useState('');
   const [saving, setSaving] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
   const [provisionMsg, setProvisionMsg] = useState('');
@@ -29,12 +47,47 @@ export default function TenantDetailPage() {
 
   async function loadAll() {
     try {
-      const [t, l] = await Promise.all([
+      const [t, l, p, pr] = await Promise.all([
         api.listTenants().then(arr => arr.find((x: any) => x.id === id)),
         api.getTenantLicenses(id!),
+        api.listPlans(),
+        api.listPlanRequests(id!).catch(() => []),
       ]);
       setTenant(t);
       setLicenses(l);
+      setPlans(p.filter((pl: any) => pl.isActive));
+      setPlanRequests(pr.filter((r: any) => r.status === 'pending'));
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function handleResolvePlanRequest(requestId: string, status: 'approved' | 'rejected') {
+    const adminResponse = prompt(status === 'approved'
+      ? 'Optional note (e.g. "Renewed via license below on 2026-07-05")'
+      : 'Optional reason for rejecting') ?? undefined;
+    if (status === 'approved') {
+      alert('Marking approved. Remember: this does NOT itself renew/change the plan — use Renew/Change Plan on the license below first.');
+    }
+    try {
+      await api.resolvePlanRequest(id!, requestId, { status, adminResponse: adminResponse || undefined });
+      await loadAll();
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function handleRenew(licId: string) {
+    const days = prompt('Extend by how many days? (leave blank to use the license\'s plan default, or 30)');
+    if (days === null) return;
+    try {
+      await api.renewLicense(licId, days.trim() ? Number(days) : undefined);
+      await loadAll();
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function handleChangePlan(licId: string) {
+    if (!changePlanId) return;
+    try {
+      await api.changeLicensePlan(licId, changePlanId, confirm('Also extend expiry by the new plan\'s duration?'));
+      setChangePlanFor(null);
+      await loadAll();
     } catch (e: any) { setError(e.message); }
   }
 
@@ -46,7 +99,8 @@ export default function TenantDetailPage() {
         tenantId: id,
         mode: licForm.mode,
         expiresAt: licForm.expiresAt,
-        features: JSON.parse(licForm.features),
+        planId: licForm.planId || undefined,
+        features: licForm.features.trim() ? JSON.parse(licForm.features) : undefined,
       });
       setShowLicForm(false);
       await loadAll();
@@ -144,7 +198,28 @@ export default function TenantDetailPage() {
       <div style={styles.infoGrid}>
         <div style={styles.infoCard}>
           <div style={styles.infoLabel}>Plan</div>
-          <div style={styles.infoVal}>{tenant.plan}</div>
+          <div style={styles.infoVal}>{planLabel(tenant)}</div>
+          {tenant.plan && typeof tenant.plan === 'object' && (
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+              {tenant.plan.maxUsers === null ? '∞' : tenant.plan.maxUsers} users · {tenant.plan.maxLocations === null ? '∞' : tenant.plan.maxLocations} locations
+            </div>
+          )}
+        </div>
+        <div style={styles.infoCard}>
+          <div style={styles.infoLabel}>Expires</div>
+          {(() => {
+            const d = daysUntil(tenant.subscriptionEndsAt);
+            if (d === null) return <div style={{ ...styles.infoVal, color: '#94a3b8' }}>—</div>;
+            const color = d < 0 ? '#ef4444' : d <= 7 ? '#f59e0b' : '#1e293b';
+            return (
+              <>
+                <div style={{ ...styles.infoVal, color }}>{new Date(tenant.subscriptionEndsAt).toLocaleDateString()}</div>
+                <div style={{ fontSize: 12, color, marginTop: 2 }}>
+                  {d < 0 ? `Expired ${Math.abs(d)}d ago` : d === 0 ? 'Expires today' : `${d}d remaining`}
+                </div>
+              </>
+            );
+          })()}
         </div>
         <div style={styles.infoCard}>
           <div style={styles.infoLabel}>Business Type</div>
@@ -210,6 +285,34 @@ export default function TenantDetailPage() {
         )}
       </div>
 
+      {/* Pending plan requests — raised by the tenant from the POS itself */}
+      {planRequests.length > 0 && (
+        <div style={{ ...styles.card, margin: '24px 0', border: '1px solid #fde68a', background: '#fffbeb' }}>
+          <p style={{ fontSize: 14, fontWeight: 600, color: '#92400e', margin: '0 0 12px' }}>
+            Pending Plan Requests ({planRequests.length})
+          </p>
+          {planRequests.map(r => (
+            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #fde68a' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>
+                  {r.type}{r.requestedPlanKey ? ` → ${r.requestedPlanKey}` : ''}
+                </p>
+                {r.note && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>"{r.note}"</p>}
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: '#94a3b8' }}>{new Date(r.createdAt).toLocaleString()}</p>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => handleResolvePlanRequest(r.id, 'approved')} style={{ ...styles.actionBtn, background: '#10b981', color: '#fff', border: 'none' }}>
+                  Approve
+                </button>
+                <button onClick={() => handleResolvePlanRequest(r.id, 'rejected')} style={{ ...styles.actionBtn, color: '#ef4444' }}>
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Licenses section */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '32px 0 16px' }}>
         <h3 style={styles.sectionHeading}>Licenses</h3>
@@ -234,12 +337,21 @@ export default function TenantDetailPage() {
               <input style={styles.input} type="date" required value={licForm.expiresAt}
                 onChange={e => setLicForm(f => ({ ...f, expiresAt: e.target.value }))} />
             </div>
+            <div>
+              <label style={styles.label}>Plan</label>
+              <select style={styles.input} value={licForm.planId}
+                onChange={e => setLicForm(f => ({ ...f, planId: e.target.value }))}>
+                <option value="">None (use Features JSON below)</option>
+                {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <span style={styles.hint}>Drives maxUsers/maxLocations automatically</span>
+            </div>
           </div>
           <div style={{ marginTop: 12 }}>
-            <label style={styles.label}>Features (JSON)</label>
+            <label style={styles.label}>Features (JSON) — only needed for manual overrides or a plan-less license</label>
             <input style={styles.input} value={licForm.features}
               onChange={e => setLicForm(f => ({ ...f, features: e.target.value }))}
-              placeholder='{"maxLocations":1,"restaurantMode":false,"pharmacyMode":false,"multiRegister":false}' />
+              placeholder='{"restaurantMode":false,"pharmacyMode":false,"multiRegister":false}' />
           </div>
           <button type="submit" disabled={saving} style={{ ...styles.primaryBtn, marginTop: 16 }}>
             {saving ? 'Issuing…' : 'Issue License'}
@@ -269,6 +381,14 @@ export default function TenantDetailPage() {
               <td style={styles.td}>{new Date(l.expiresAt).toLocaleDateString()}</td>
               <td style={styles.td}>{l.activatedAt ? new Date(l.activatedAt).toLocaleDateString() : 'Not yet'}</td>
               <td style={styles.td}>
+                {l.status !== 'revoked' && (
+                  <button onClick={() => handleRenew(l.id)} style={{ ...styles.actionBtn, color: '#10b981' }}>Renew</button>
+                )}
+                {l.status !== 'revoked' && (
+                  <button onClick={() => { setChangePlanFor(changePlanFor === l.id ? null : l.id); setChangePlanId(l.planId ?? ''); }} style={styles.actionBtn}>
+                    Change Plan
+                  </button>
+                )}
                 {l.mode === 'offline' && l.status === 'active' && (
                   <button onClick={() => { setShowOffline(l.id); setOfflineResult(''); }} style={styles.actionBtn}>
                     Offline File
@@ -276,6 +396,18 @@ export default function TenantDetailPage() {
                 )}
                 {l.status === 'active' && (
                   <button onClick={() => handleRevoke(l.id)} style={{ ...styles.actionBtn, color: '#ef4444' }}>Revoke</button>
+                )}
+                {changePlanFor === l.id && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <select style={{ ...styles.input, width: 'auto', padding: '6px 8px', fontSize: 13 }} value={changePlanId}
+                      onChange={e => setChangePlanId(e.target.value)}>
+                      <option value="">Select plan…</option>
+                      {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <button onClick={() => handleChangePlan(l.id)} disabled={!changePlanId} style={{ ...styles.actionBtn, background: '#3b82f6', color: '#fff' }}>
+                      Apply
+                    </button>
+                  </div>
                 )}
               </td>
             </tr>
