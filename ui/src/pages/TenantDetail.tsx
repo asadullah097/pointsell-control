@@ -60,14 +60,34 @@ export default function TenantDetailPage() {
     } catch (e: any) { setError(e.message); }
   }
 
-  async function handleResolvePlanRequest(requestId: string, status: 'approved' | 'rejected') {
+  /**
+   * Approving used to be a two-step, easy-to-forget manual process: apply the
+   * matching Renew/Change Plan action on the license below, THEN separately
+   * resolve the request — enforced only by an alert() reminder. When there's
+   * exactly one active license (the normal case), this now applies the
+   * matching action automatically as part of approval, so the two steps can't
+   * drift apart. Falls back to the old manual reminder when it's ambiguous
+   * (zero or multiple active licenses) or for cancellation requests, which
+   * have no single corresponding license action.
+   */
+  async function handleResolvePlanRequest(requestId: string, status: 'approved' | 'rejected', request?: any) {
     const adminResponse = prompt(status === 'approved'
       ? 'Optional note (e.g. "Renewed via license below on 2026-07-05")'
       : 'Optional reason for rejecting') ?? undefined;
-    if (status === 'approved') {
-      alert('Marking approved. Remember: this does NOT itself renew/change the plan — use Renew/Change Plan on the license below first.');
-    }
+
+    const activeLicenses = licenses.filter(l => l.status === 'active');
+    const license = activeLicenses.length === 1 ? activeLicenses[0] : null;
+
     try {
+      if (status === 'approved' && request?.type === 'renewal' && license) {
+        await api.renewLicense(license.id);
+      } else if (status === 'approved' && request?.type === 'upgrade' && license && request.requestedPlanKey) {
+        const plan = plans.find(p => p.key === request.requestedPlanKey);
+        if (plan) await api.changeLicensePlan(license.id, plan.id, false);
+        else alert(`Marking approved, but plan key "${request.requestedPlanKey}" wasn't found among active plans — change it manually on the license below.`);
+      } else if (status === 'approved') {
+        alert('Marking approved. Remember: this does NOT itself renew/change the plan — use Renew/Change Plan on the license below first.');
+      }
       await api.resolvePlanRequest(id!, requestId, { status, adminResponse: adminResponse || undefined });
       await loadAll();
     } catch (e: any) { setError(e.message); }
@@ -291,25 +311,41 @@ export default function TenantDetailPage() {
           <p style={{ fontSize: 14, fontWeight: 600, color: '#92400e', margin: '0 0 12px' }}>
             Pending Plan Requests ({planRequests.length})
           </p>
-          {planRequests.map(r => (
-            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #fde68a' }}>
-              <div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>
-                  {r.type}{r.requestedPlanKey ? ` → ${r.requestedPlanKey}` : ''}
-                </p>
-                {r.note && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>"{r.note}"</p>}
-                <p style={{ margin: '2px 0 0', fontSize: 11, color: '#94a3b8' }}>{new Date(r.createdAt).toLocaleString()}</p>
+          {planRequests.map(r => {
+            const activeLicenses = licenses.filter(l => l.status === 'active');
+            const license = activeLicenses.length === 1 ? activeLicenses[0] : null;
+            let autoApplyHint: string | null = null;
+            if (r.type === 'renewal') {
+              autoApplyHint = license
+                ? 'Approving will also renew the active license below.'
+                : 'No single active license to auto-renew — apply manually after approving.';
+            } else if (r.type === 'upgrade') {
+              const plan = plans.find(p => p.key === r.requestedPlanKey);
+              autoApplyHint = license && plan
+                ? `Approving will also switch the active license to "${plan.name}".`
+                : 'No single matching active license/plan to auto-apply — apply manually after approving.';
+            }
+            return (
+              <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #fde68a' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>
+                    {r.type}{r.requestedPlanKey ? ` → ${r.requestedPlanKey}` : ''}
+                  </p>
+                  {r.note && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>"{r.note}"</p>}
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: '#94a3b8' }}>{new Date(r.createdAt).toLocaleString()}</p>
+                  {autoApplyHint && <p style={{ margin: '4px 0 0', fontSize: 11, color: license ? '#059669' : '#b45309' }}>{autoApplyHint}</p>}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => handleResolvePlanRequest(r.id, 'approved', r)} style={{ ...styles.actionBtn, background: '#10b981', color: '#fff', border: 'none' }}>
+                    Approve
+                  </button>
+                  <button onClick={() => handleResolvePlanRequest(r.id, 'rejected', r)} style={{ ...styles.actionBtn, color: '#ef4444' }}>
+                    Reject
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => handleResolvePlanRequest(r.id, 'approved')} style={{ ...styles.actionBtn, background: '#10b981', color: '#fff', border: 'none' }}>
-                  Approve
-                </button>
-                <button onClick={() => handleResolvePlanRequest(r.id, 'rejected')} style={{ ...styles.actionBtn, color: '#ef4444' }}>
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
