@@ -11,6 +11,7 @@ import { License } from './modules/licenses/license.entity';
 import { Release } from './modules/releases/release.entity';
 import { Admin } from './modules/auth/admin.entity';
 import { Plan } from './modules/plans/plan.entity';
+import { Transaction } from './modules/transactions/transaction.entity';
 
 import { AuthController } from './modules/auth/auth.controller';
 import { AdminsController } from './modules/auth/admins.controller';
@@ -20,11 +21,14 @@ import { ReleasesController } from './modules/releases/releases.controller';
 import { DashboardController } from './modules/dashboard/dashboard.controller';
 import { HealthController } from './modules/health/health.controller';
 import { PlansController } from './modules/plans/plans.controller';
+import { TicketsController } from './modules/tickets/tickets.controller';
+import { TransactionsController } from './modules/transactions/transactions.controller';
 
 import { LicenseService } from './modules/licenses/license.service';
 import { LicenseExpiryService } from './modules/licenses/license-expiry.service';
 import { TenantsService } from './modules/tenants/tenants.service';
 import { PlansService } from './modules/plans/plans.service';
+import { TransactionsService } from './modules/transactions/transactions.service';
 import { PlansSeeder } from './modules/plans/plans.seeder';
 import { AdminSeeder } from './modules/auth/admin.seeder';
 import { AdminGuard } from './common/guards/admin.guard';
@@ -54,13 +58,13 @@ const publicDir = join(__dirname, '..', 'public');
         username: config.get('DB_USER', 'postgres'),
         password: config.get('DB_PASS'),
         database: config.get('DB_NAME', 'pointsell_control'),
-        entities: [Tenant, License, Release, Admin, Plan],
+        entities: [Tenant, License, Release, Admin, Plan, Transaction],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') !== 'production',
       }),
     }),
 
-    TypeOrmModule.forFeature([Tenant, License, Release, Admin, Plan]),
+    TypeOrmModule.forFeature([Tenant, License, Release, Admin, Plan, Transaction]),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -80,12 +84,15 @@ const publicDir = join(__dirname, '..', 'public');
     ReleasesController,
     DashboardController,
     PlansController,
+    TicketsController,
+    TransactionsController,
   ],
   providers: [
     LicenseService,
     LicenseExpiryService,
     TenantsService,
     PlansService,
+    TransactionsService,
     PlansSeeder,
     AdminSeeder,
     AdminGuard,

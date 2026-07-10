@@ -107,10 +107,21 @@ export class LicenseService {
     return saved;
   }
 
+  /** Renewal opens up this many days before expiry — matches heartbeat()'s renewalRequired heuristic. */
+  private static readonly RENEWAL_WINDOW_DAYS = 30;
+
   /** Extends `expiresAt` on the existing license row rather than creating a new one. */
   async renew(licenseId: string, durationDays?: number): Promise<License> {
     const license = await this.licenseRepo.findOne({ where: { id: licenseId }, relations: ['plan'] });
     if (!license) throw new NotFoundException('License not found.');
+
+    const daysLeft = (license.expiresAt.getTime() - Date.now()) / 86_400_000;
+    if (daysLeft >= LicenseService.RENEWAL_WINDOW_DAYS) {
+      throw new BadRequestException(
+        `This license is still active for ${Math.ceil(daysLeft)} more days — renewal only opens up within ` +
+          `${LicenseService.RENEWAL_WINDOW_DAYS} days of expiry (or after it lapses). Use "Change Plan" instead if you need to switch plans now.`,
+      );
+    }
 
     const days = durationDays ?? license.plan?.durationDays ?? 30;
     const base = license.expiresAt > new Date() ? license.expiresAt : new Date();

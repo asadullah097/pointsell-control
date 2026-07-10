@@ -28,6 +28,7 @@ export default function TenantDetailPage() {
   const [licenses, setLicenses] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [planRequests, setPlanRequests] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [showLicForm, setShowLicForm] = useState(false);
   const [showOffline, setShowOffline] = useState<string | null>(null);
@@ -47,16 +48,21 @@ export default function TenantDetailPage() {
 
   async function loadAll() {
     try {
-      const [t, l, p, pr] = await Promise.all([
-        api.listTenants().then(arr => arr.find((x: any) => x.id === id)),
+      // Plan requests are keyed by the tenant's POS slug, not its id — need
+      // the tenant object (for its `slug` field) before that call can be made.
+      const t = await api.listTenants().then(arr => arr.find((x: any) => x.id === id));
+      setTenant(t);
+
+      const [l, p, pr, tx] = await Promise.all([
         api.getTenantLicenses(id!),
         api.listPlans(),
-        api.listPlanRequests(id!).catch(() => []),
+        t?.slug ? api.listPlanRequests(t.slug).catch(() => []) : Promise.resolve([]),
+        api.listTransactions({ tenantId: id! }).catch(() => []),
       ]);
-      setTenant(t);
       setLicenses(l);
       setPlans(p.filter((pl: any) => pl.isActive));
       setPlanRequests(pr.filter((r: any) => r.status === 'pending'));
+      setTransactions(tx);
     } catch (e: any) { setError(e.message); }
   }
 
@@ -80,15 +86,19 @@ export default function TenantDetailPage() {
 
     try {
       if (status === 'approved' && request?.type === 'renewal' && license) {
+        // No durationDays passed → license.service.ts defaults to the license's
+        // current plan's durationDays (30 for monthly plans, 365 for yearly).
         await api.renewLicense(license.id);
       } else if (status === 'approved' && request?.type === 'upgrade' && license && request.requestedPlanKey) {
         const plan = plans.find(p => p.key === request.requestedPlanKey);
-        if (plan) await api.changeLicensePlan(license.id, plan.id, false);
+        // extend=true → expiry also moves out by the new plan's durationDays
+        // (30 days for a monthly plan, 365 for a yearly plan).
+        if (plan) await api.changeLicensePlan(license.id, plan.id, true);
         else alert(`Marking approved, but plan key "${request.requestedPlanKey}" wasn't found among active plans — change it manually on the license below.`);
       } else if (status === 'approved') {
         alert('Marking approved. Remember: this does NOT itself renew/change the plan — use Renew/Change Plan on the license below first.');
       }
-      await api.resolvePlanRequest(id!, requestId, { status, adminResponse: adminResponse || undefined });
+      await api.resolvePlanRequest(tenant.slug, requestId, { status, adminResponse: adminResponse || undefined });
       await loadAll();
     } catch (e: any) { setError(e.message); }
   }
@@ -96,17 +106,58 @@ export default function TenantDetailPage() {
   async function handleRenew(licId: string) {
     const days = prompt('Extend by how many days? (leave blank to use the license\'s plan default, or 30)');
     if (days === null) return;
+
+    const lic = licenses.find(l => l.id === licId);
+    const plan = plans.find(p => p.id === lic?.planId);
+    const amountStr = prompt(
+      `Amount received for this renewal?${plan ? ` (catalog price: ${plan.price} / ${plan.billingCycle})` : ''} Leave blank to use the catalog price.`,
+    );
+    if (amountStr === null) return;
+
     try {
-      await api.renewLicense(licId, days.trim() ? Number(days) : undefined);
+      await api.renewLicense(
+        licId,
+        days.trim() ? Number(days) : undefined,
+        amountStr.trim() ? Number(amountStr) : undefined,
+      );
       await loadAll();
     } catch (e: any) { setError(e.message); }
   }
 
   async function handleChangePlan(licId: string) {
     if (!changePlanId) return;
+    const plan = plans.find(p => p.id === changePlanId);
+    const amountStr = prompt(
+      `Amount received for this plan change?${plan ? ` (catalog price: ${plan.price} / ${plan.billingCycle})` : ''} Leave blank to use the catalog price.`,
+    );
+    if (amountStr === null) return;
+
     try {
-      await api.changeLicensePlan(licId, changePlanId, confirm('Also extend expiry by the new plan\'s duration?'));
+      await api.changeLicensePlan(
+        licId,
+        changePlanId,
+        confirm('Also extend expiry by the new plan\'s duration?'),
+        amountStr.trim() ? Number(amountStr) : undefined,
+      );
       setChangePlanFor(null);
+      await loadAll();
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function handleRecordPayment() {
+    const amountStr = prompt('Amount received?');
+    if (amountStr === null || !amountStr.trim()) return;
+    const amount = Number(amountStr);
+    if (!Number.isFinite(amount) || amount < 0) { setError('Invalid amount'); return; }
+
+    const cycle = prompt('Billing cycle — type "monthly" or "yearly"', 'monthly');
+    if (cycle === null) return;
+    const billingCycle = cycle.trim().toLowerCase() === 'yearly' ? 'yearly' : 'monthly';
+
+    const note = prompt('Note (e.g. "Paid via bank transfer, receipt #4521")') ?? undefined;
+
+    try {
+      await api.recordTransaction({ tenantId: id!, amount, billingCycle, note: note || undefined });
       await loadAll();
     } catch (e: any) { setError(e.message); }
   }
@@ -317,12 +368,12 @@ export default function TenantDetailPage() {
             let autoApplyHint: string | null = null;
             if (r.type === 'renewal') {
               autoApplyHint = license
-                ? 'Approving will also renew the active license below.'
+                ? `Approving will renew the active license and extend expiry by ${license.plan?.billingCycle === 'yearly' ? 'a year' : `${license.plan?.durationDays ?? 30} days`} (recorded as a transaction below).`
                 : 'No single active license to auto-renew — apply manually after approving.';
             } else if (r.type === 'upgrade') {
               const plan = plans.find(p => p.key === r.requestedPlanKey);
               autoApplyHint = license && plan
-                ? `Approving will also switch the active license to "${plan.name}".`
+                ? `Approving will switch the active license to "${plan.name}" and extend expiry by ${plan.billingCycle === 'yearly' ? 'a year' : `${plan.durationDays} days`} (recorded as a transaction below).`
                 : 'No single matching active license/plan to auto-apply — apply manually after approving.';
             }
             return (
@@ -492,6 +543,42 @@ export default function TenantDetailPage() {
           )}
         </div>
       )}
+
+      {/* Transaction history */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '32px 0 16px' }}>
+        <h3 style={styles.sectionHeading}>Transaction History</h3>
+        <button onClick={handleRecordPayment} style={styles.primaryBtn}>+ Record Payment</button>
+      </div>
+
+      <table style={styles.table}>
+        <thead>
+          <tr style={styles.thead}>
+            <th style={styles.th}>Date</th>
+            <th style={styles.th}>Type</th>
+            <th style={styles.th}>Plan</th>
+            <th style={styles.th}>Amount</th>
+            <th style={styles.th}>Cycle</th>
+            <th style={styles.th}>Note</th>
+            <th style={styles.th}>Recorded By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {transactions.map(t => (
+            <tr key={t.id} style={styles.tr}>
+              <td style={styles.td}>{new Date(t.createdAt).toLocaleString()}</td>
+              <td style={styles.td}><span style={{ textTransform: 'capitalize' }}>{t.type}</span></td>
+              <td style={styles.td}>{t.plan?.name ?? '—'}</td>
+              <td style={{ ...styles.td, fontWeight: 600 }}>${Number(t.amount).toFixed(2)}</td>
+              <td style={styles.td}>{t.billingCycle}</td>
+              <td style={styles.td}>{t.note ?? '—'}</td>
+              <td style={styles.td}>{t.recordedByAdminEmail ?? '—'}</td>
+            </tr>
+          ))}
+          {transactions.length === 0 && (
+            <tr><td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: '#94a3b8' }}>No transactions recorded yet</td></tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

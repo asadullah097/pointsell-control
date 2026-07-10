@@ -1,6 +1,6 @@
 import {
   Body, Controller, Delete, Get, HttpCode,
-  HttpStatus, NotFoundException, Param, ParseUUIDPipe, Patch, Post, UseGuards,
+  HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth, ApiNoContentResponse, ApiNotFoundResponse,
@@ -113,29 +113,33 @@ export class TenantsController {
     return [];
   }
 
-  // ── Plan requests (cloud only — proxied by posSlug, not this tenant's own id) ──
+  // ── Plan requests (cloud only) ─────────────────────────────────────────────
+  // Routed by POS tenant slug, not this app's own tenant.id — see the same
+  // reasoning in tickets.controller.ts. When posApi is configured, findAll()/
+  // findOne() above proxy nestjs-pos's tenant rows directly, so `id` on this
+  // page is ALREADY the nestjs-pos-side id; resolving it against this app's
+  // own local `tenants` table (a different UUID space) always missed, which
+  // is why approvals silently never showed up here. Slug is the identifier
+  // both sides actually share, and the tenant object the frontend already
+  // has (from listTenants()) carries it directly — no lookup needed.
 
-  @Get(':id/plan-requests')
+  @Get(':slug/plan-requests')
   @ApiOperation({ summary: "List a tenant's pending plan requests raised from the POS (cloud only)" })
-  async listPlanRequests(@Param('id', ParseUUIDPipe) id: string) {
+  listPlanRequests(@Param('slug') slug: string) {
     if (!this.posApi.isConfigured) return [];
-    const tenant = await this.tenantsService.findOne(id);
-    if (!tenant.posSlug) return [];
-    return this.posApi.listPlanRequests(tenant.posSlug);
+    return this.posApi.listPlanRequests(slug);
   }
 
-  @Patch(':id/plan-requests/:requestId')
+  @Patch(':slug/plan-requests/:requestId')
   @ApiOperation({ summary: 'Approve or reject a plan request (cloud only)' })
-  async resolvePlanRequest(
-    @Param('id', ParseUUIDPipe) id: string,
+  resolvePlanRequest(
+    @Param('slug') slug: string,
     @Param('requestId') requestId: string,
     @Body() body: { status: 'approved' | 'rejected'; adminResponse?: string },
   ) {
     if (!this.posApi.isConfigured) {
       return { message: 'Plan requests are only available in cloud mode' };
     }
-    const tenant = await this.tenantsService.findOne(id);
-    if (!tenant.posSlug) throw new NotFoundException('Tenant has no linked POS slug');
-    return this.posApi.resolvePlanRequest(tenant.posSlug, requestId, body);
+    return this.posApi.resolvePlanRequest(slug, requestId, body);
   }
 }

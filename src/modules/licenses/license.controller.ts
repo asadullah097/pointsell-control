@@ -9,11 +9,14 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { LicenseService } from './license.service';
 import { PlansService } from '../plans/plans.service';
+import { TransactionsService } from '../transactions/transactions.service';
+import { TenantsService } from '../tenants/tenants.service';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { Public } from '../../common/guards/public.decorator';
 import {
@@ -30,6 +33,8 @@ export class LicenseController {
   constructor(
     private readonly licenseService: LicenseService,
     private readonly plansService: PlansService,
+    private readonly transactionsService: TransactionsService,
+    private readonly tenantsService: TenantsService,
   ) {}
 
   @Post()
@@ -38,13 +43,14 @@ export class LicenseController {
   @ApiOperation({ summary: 'Create a license for a tenant (admin only)' })
   @ApiCreatedResponse({ description: 'License created with a generated license key' })
   async create(@Body() dto: CreateLicenseDto) {
+    const tenantId = await this.tenantsService.resolveLocalId(dto.tenantId);
     let features = dto.features ?? {};
     if (dto.planId) {
       const plan = await this.plansService.findOne(dto.planId);
       features = { maxUsers: plan.maxUsers, maxLocations: plan.maxLocations, ...features };
     }
     return this.licenseService.create(
-      dto.tenantId,
+      tenantId,
       dto.mode,
       new Date(dto.expiresAt),
       features,
@@ -55,19 +61,49 @@ export class LicenseController {
   @Patch(':id/renew')
   @UseGuards(AdminGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Extend expiresAt on the existing license (does not create a new row)' })
-  renew(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RenewLicenseDto) {
-    return this.licenseService.renew(id, dto.durationDays);
+  @ApiOperation({ summary: 'Extend expiresAt on the existing license (does not create a new row) and record the payment' })
+  async renew(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RenewLicenseDto, @Req() req: any) {
+    const license = await this.licenseService.renew(id, dto.durationDays);
+
+    // Record what was actually charged — best-effort, never blocks the renewal itself.
+    // Always record, even when the license has no catalog plan attached (features-only
+    // licenses): fall back to a sane default rather than silently dropping the payment.
+    const plan = license.planId ? await this.plansService.findOne(license.planId).catch(() => null) : null;
+    await this.transactionsService.record({
+      tenantId: license.tenantId,
+      licenseId: license.id,
+      planId: plan?.id ?? null,
+      amount: dto.amount ?? plan?.price ?? 0,
+      billingCycle: plan?.billingCycle ?? 'monthly',
+      type: 'renewal',
+      note: dto.note,
+      recordedByAdminEmail: req.admin?.email,
+    });
+
+    return license;
   }
 
   @Patch(':id/change-plan')
   @UseGuards(AdminGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Reassign a license to a different plan, snapshotting its limits' })
-  async changePlan(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeLicensePlanDto) {
+  @ApiOperation({ summary: 'Reassign a license to a different plan, snapshotting its limits, and record the payment' })
+  async changePlan(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeLicensePlanDto, @Req() req: any) {
     const plan = await this.plansService.findOne(dto.planId);
     const extendDays = dto.extend ? plan.durationDays : undefined;
-    return this.licenseService.changePlan(id, dto.planId, { maxUsers: plan.maxUsers, maxLocations: plan.maxLocations }, extendDays);
+    const license = await this.licenseService.changePlan(id, dto.planId, { maxUsers: plan.maxUsers, maxLocations: plan.maxLocations }, extendDays);
+
+    await this.transactionsService.record({
+      tenantId: license.tenantId,
+      licenseId: license.id,
+      planId: plan.id,
+      amount: dto.amount ?? plan.price,
+      billingCycle: plan.billingCycle,
+      type: 'upgrade',
+      note: dto.note,
+      recordedByAdminEmail: req.admin?.email,
+    });
+
+    return license;
   }
 
   @Get('tenant/:tenantId')
@@ -75,8 +111,9 @@ export class LicenseController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all licenses for a tenant (admin only)' })
   @ApiOkResponse({ description: 'Array of license records' })
-  listForTenant(@Param('tenantId', ParseUUIDPipe) tenantId: string) {
-    return this.licenseService.findAllForTenant(tenantId);
+  async listForTenant(@Param('tenantId', ParseUUIDPipe) tenantId: string) {
+    const localId = await this.tenantsService.resolveLocalId(tenantId);
+    return this.licenseService.findAllForTenant(localId);
   }
 
   @Delete(':id')

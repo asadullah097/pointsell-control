@@ -7,6 +7,9 @@ import ReleasesPage from './pages/Releases';
 import AdminsPage from './pages/Admins';
 import PlansPage from './pages/Plans';
 import InstallGuidePage from './pages/InstallGuide';
+import TicketsPage from './pages/Tickets';
+import TicketDetailPage from './pages/TicketDetail';
+import TransactionsPage from './pages/Transactions';
 import Layout from './components/Layout';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -33,6 +36,9 @@ export default function App() {
           <Route path="plans" element={<PlansPage />} />
           <Route path="releases" element={<ReleasesPage />} />
           <Route path="admins" element={<AdminsPage />} />
+          <Route path="tickets" element={<TicketsPage />} />
+          <Route path="tickets/:slug/:ticketId" element={<TicketDetailPage />} />
+          <Route path="transactions" element={<TransactionsPage />} />
           <Route path="install-guide" element={<InstallGuidePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

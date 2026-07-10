@@ -45,19 +45,29 @@ export const api = {
   deleteTenant: (id: string) => request<void>('DELETE', `/tenants/${id}`),
   getTenantLicenses: (tenantId: string) => request<any[]>('GET', `/licenses/tenant/${tenantId}`),
   getMetrics: (id: string) => request<any>('GET', `/tenants/${id}/metrics`),
-  listPlanRequests: (id: string) => request<any[]>('GET', `/tenants/${id}/plan-requests`),
-  resolvePlanRequest: (id: string, requestId: string, body: { status: 'approved' | 'rejected'; adminResponse?: string }) =>
-    request<any>('PATCH', `/tenants/${id}/plan-requests/${requestId}`, body),
+  // Keyed by POS tenant slug, not this tenant's own id — see tenants.controller.ts.
+  listPlanRequests: (slug: string) => request<any[]>('GET', `/tenants/${slug}/plan-requests`),
+  resolvePlanRequest: (slug: string, requestId: string, body: { status: 'approved' | 'rejected'; adminResponse?: string }) =>
+    request<any>('PATCH', `/tenants/${slug}/plan-requests/${requestId}`, body),
 
   // Licenses
   createLicense: (body: any) => request<any>('POST', '/licenses', body),
   revokeLicense: (id: string) => request<void>('DELETE', `/licenses/${id}`),
   generateOfflineFile: (id: string, fingerprint: string, businessName: string) =>
     request<any>('POST', `/licenses/${id}/offline-file`, { fingerprint, businessName }),
-  renewLicense: (id: string, durationDays?: number) =>
-    request<any>('PATCH', `/licenses/${id}/renew`, durationDays ? { durationDays } : {}),
-  changeLicensePlan: (id: string, planId: string, extend?: boolean) =>
-    request<any>('PATCH', `/licenses/${id}/change-plan`, { planId, extend }),
+  renewLicense: (id: string, durationDays?: number, amount?: number, note?: string) =>
+    request<any>('PATCH', `/licenses/${id}/renew`, { durationDays, amount, note }),
+  changeLicensePlan: (id: string, planId: string, extend?: boolean, amount?: number, note?: string) =>
+    request<any>('PATCH', `/licenses/${id}/change-plan`, { planId, extend, amount, note }),
+
+  // Transactions
+  listTransactions: (params?: { tenantId?: string; from?: string; to?: string }) => {
+    const qs = new URLSearchParams(Object.entries(params ?? {}).filter(([, v]) => v) as [string, string][]).toString();
+    return request<any[]>('GET', `/transactions${qs ? `?${qs}` : ''}`);
+  },
+  getTransactionSummary: () => request<any>('GET', '/transactions/summary'),
+  recordTransaction: (body: { tenantId: string; planId?: string; amount: number; billingCycle: 'monthly' | 'yearly'; note?: string }) =>
+    request<any>('POST', '/transactions', body),
 
   // Plans
   listPlans: () => request<any[]>('GET', '/plans'),
@@ -76,4 +86,12 @@ export const api = {
   listAdmins: () => request<any[]>('GET', '/auth/admins'),
   createAdmin: (body: any) => request<any>('POST', '/auth/admins', body),
   deleteAdmin: (id: string) => request<void>('DELETE', `/auth/admins/${id}`),
+
+  // Support tickets
+  listTickets: () => request<any[]>('GET', '/tickets'),
+  getTicket: (tenantId: string, ticketId: string) => request<any>('GET', `/tickets/${tenantId}/${ticketId}`),
+  replyTicket: (tenantId: string, ticketId: string, message: string) =>
+    request<any>('POST', `/tickets/${tenantId}/${ticketId}/reply`, { message }),
+  updateTicketStatus: (tenantId: string, ticketId: string, status: 'in_progress' | 'resolved' | 'closed') =>
+    request<any>('PATCH', `/tickets/${tenantId}/${ticketId}/status`, { status }),
 };

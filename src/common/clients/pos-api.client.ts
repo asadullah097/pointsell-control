@@ -26,6 +26,41 @@ export interface PosTenantMetrics {
   collectedAt: string;
 }
 
+export interface PosTicketAttachment {
+  id: string;
+  storageKey: string;
+  mimeType: string;
+  sizeBytes: number;
+  durationSeconds?: number;
+  originalFilename?: string;
+}
+
+export interface PosTicketMessage {
+  id: string;
+  ticketId: string;
+  senderType: 'customer' | 'admin';
+  senderName?: string;
+  body: string;
+  attachments: PosTicketAttachment[];
+  createdAt: string;
+}
+
+export interface PosTicket {
+  id: string;
+  subject: string;
+  status: 'open' | 'in_progress' | 'resolved' | 'closed' | 'reopened';
+  createdByName?: string;
+  createdByEmail?: string;
+  lastMessageAt: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  messages?: PosTicketMessage[];
+  // Present only on the aggregate /admin/tickets/all response
+  tenantId?: string;
+  tenantSlug?: string;
+  tenantName?: string;
+}
+
 /**
  * PosApiClient — HTTP client for the nestjs-pos admin API.
  *
@@ -160,6 +195,32 @@ export class PosApiClient {
     body: { status: 'approved' | 'rejected'; adminResponse?: string },
   ): Promise<any> {
     return this.patch<any>(`admin/tenants/by-slug/${slug}/plan-requests/${requestId}`, body);
+  }
+
+  // ── Support tickets (cloud only — proxied by posSlug) ─────────────────────
+
+  listAllTickets(): Promise<PosTicket[]> {
+    return this.get<PosTicket[]>('admin/tickets/all');
+  }
+
+  listTickets(slug: string): Promise<PosTicket[]> {
+    return this.get<PosTicket[]>(`admin/tickets/by-slug/${slug}`);
+  }
+
+  getTicket(slug: string, ticketId: string): Promise<PosTicket> {
+    return this.get<PosTicket>(`admin/tickets/by-slug/${slug}/${ticketId}`);
+  }
+
+  replyTicket(slug: string, ticketId: string, message: string, adminName?: string): Promise<PosTicket> {
+    return this.post<PosTicket>(`admin/tickets/by-slug/${slug}/${ticketId}/reply`, { message, adminName });
+  }
+
+  updateTicketStatus(
+    slug: string,
+    ticketId: string,
+    status: 'in_progress' | 'resolved' | 'closed',
+  ): Promise<PosTicket> {
+    return this.patch<PosTicket>(`admin/tickets/by-slug/${slug}/${ticketId}/status`, { status });
   }
 
   // ── Private HTTP helpers ──────────────────────────────────────────────────

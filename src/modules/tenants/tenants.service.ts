@@ -118,4 +118,28 @@ export class TenantsService {
     await this.findOne(id);
     await this.repo.delete(id);
   }
+
+  /**
+   * Translate a tenant id the frontend hands us into this repo's own id.
+   *
+   * When posApi is configured, list/detail pages display and pass around
+   * nestjs-pos's tenant id (see findAll() above), not this repo's own id —
+   * the two are unrelated UUIDs generated independently at provisioning
+   * time, linked only by the shared `slug`/`posSlug`. Any local table with a
+   * `tenantId` FK (License, Transaction) needs the local id, so resolve via
+   * slug when a direct id match fails. Same root cause as the tickets/plan-
+   * requests slug-routing fix.
+   */
+  async resolveLocalId(id: string): Promise<string> {
+    const direct = await this.repo.findOneBy({ id });
+    if (direct) return direct.id;
+
+    if (!this.posApiClient.isConfigured) {
+      throw new NotFoundException(`Tenant ${id} not found`);
+    }
+    const posTenant = await this.posApiClient.getTenant(id);
+    const local = await this.repo.findOneBy({ posSlug: posTenant.slug });
+    if (!local) throw new NotFoundException(`Tenant ${id} not found`);
+    return local.id;
+  }
 }

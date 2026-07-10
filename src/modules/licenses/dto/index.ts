@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsEnum, IsInt, IsObject, IsOptional, IsString, IsUUID, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Min, MinLength } from 'class-validator';
 
 export class CreateLicenseDto {
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000', description: 'Tenant UUID to assign this license to' })
@@ -34,6 +34,17 @@ export class RenewLicenseDto {
   @Min(1)
   @IsOptional()
   durationDays?: number;
+
+  @ApiPropertyOptional({ example: 2500, description: 'Amount actually charged for this renewal. Defaults to the plan\'s catalog price.' })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  amount?: number;
+
+  @ApiPropertyOptional({ example: 'Paid via bank transfer' })
+  @IsString()
+  @IsOptional()
+  note?: string;
 }
 
 export class ChangeLicensePlanDto {
@@ -45,6 +56,17 @@ export class ChangeLicensePlanDto {
   @IsBoolean()
   @IsOptional()
   extend?: boolean;
+
+  @ApiPropertyOptional({ example: 2500, description: 'Amount actually charged for this change. Defaults to the new plan\'s catalog price.' })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  amount?: number;
+
+  @ApiPropertyOptional({ example: 'Upgraded mid-cycle, prorated manually' })
+  @IsString()
+  @IsOptional()
+  note?: string;
 }
 
 export class ActivateLicenseDto {
