@@ -223,6 +223,20 @@ export class PosApiClient {
     return this.patch<PosTicket>(`admin/tickets/by-slug/${slug}/${ticketId}/status`, { status });
   }
 
+  /** Raw (non-JSON) proxy for streaming an attachment's bytes back through our own response. */
+  async fetchTicketAttachment(slug: string, ticketId: string, attachmentId: string) {
+    if (!this.isConfigured) {
+      throw new InternalServerErrorException('CLOUD_POS_API_URL / CONTROL_PANEL_API_KEY not configured');
+    }
+    const url = `${this.baseUrl}/v1/admin/tickets/by-slug/${slug}/${ticketId}/attachments/${attachmentId}`;
+    const res = await fetch(url, { headers: { 'X-Control-Panel-Key': this.apiKey! } });
+    if (!res.ok) {
+      this.logger.error(`POS API GET ${url} → ${res.status}`);
+      throw new InternalServerErrorException(`Failed to fetch attachment (${res.status})`);
+    }
+    return res;
+  }
+
   // ── Private HTTP helpers ──────────────────────────────────────────────────
 
   private async get<T>(path: string): Promise<T> {

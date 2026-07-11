@@ -94,4 +94,15 @@ export const api = {
     request<any>('POST', `/tickets/${tenantId}/${ticketId}/reply`, { message }),
   updateTicketStatus: (tenantId: string, ticketId: string, status: 'in_progress' | 'resolved' | 'closed') =>
     request<any>('PATCH', `/tickets/${tenantId}/${ticketId}/status`, { status }),
+  // Auth here is a bearer token in localStorage, not a cookie — a plain <a href>
+  // won't send it, so this fetches with the header and hands back an
+  // object URL the caller can open/download instead.
+  fetchTicketAttachment: async (slug: string, ticketId: string, attachmentId: string): Promise<string> => {
+    const res = await fetch(`${BASE}/tickets/${slug}/${ticketId}/attachments/${attachmentId}`, {
+      headers: { ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch attachment (${res.status})`);
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
 };

@@ -52,8 +52,21 @@ export default function TicketDetailPage() {
     } catch (e: any) { setError(e.message); }
   }
 
+  async function handleOpenAttachment(attachmentId: string) {
+    try {
+      const objectUrl = await api.fetchTicketAttachment(slug!, ticketId!, attachmentId);
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+    } catch (e: any) { setError(e.message); }
+  }
+
   if (!ticket) {
-    return <div style={{ color: '#64748b' }}>{error || 'Loading…'}</div>;
+    return (
+      <div>
+        {error && <div style={styles.error}>{error}</div>}
+        {!error && <div style={{ color: '#64748b' }}>Loading…</div>}
+        <button onClick={() => navigate('/tickets')} style={{ ...styles.backBtn, marginTop: 12 }}>&larr; All Tickets</button>
+      </div>
+    );
   }
 
   return (
@@ -99,9 +112,9 @@ export default function TicketDetailPage() {
             {m.attachments?.length > 0 && (
               <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
                 {m.attachments.map((a: any) => (
-                  <span key={a.id} style={styles.attachmentChip}>
+                  <button key={a.id} onClick={() => handleOpenAttachment(a.id)} style={{ ...styles.attachmentChip, cursor: 'pointer', border: 'none' }}>
                     📎 {a.originalFilename ?? a.storageKey.split('/').pop()}
-                  </span>
+                  </button>
                 ))}
               </div>
             )}
