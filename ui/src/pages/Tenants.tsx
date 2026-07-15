@@ -139,6 +139,11 @@ export default function TenantsPage() {
                 <option value="wholesale">Wholesale</option>
                 <option value="hybrid">Hybrid (Retail + Wholesale)</option>
                 <option value="pharmacy">Pharmacy</option>
+                <option value="grocery">Grocery</option>
+                <option value="cosmetics">Cosmetics / Beauty</option>
+                <option value="bakery">Bakery</option>
+                <option value="electronics">Electronics</option>
+                <option value="hardware">Hardware</option>
                 <option value="restaurant">Restaurant / Cafe</option>
                 <option value="service">Service</option>
               </select>

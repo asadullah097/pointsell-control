@@ -5,7 +5,24 @@ import { Plan } from '../plans/plan.entity';
 export type TenantStatus   = 'active' | 'suspended' | 'trial' | 'expired';
 /** @deprecated display-only legacy label — real limits come from `plan`/`planId` (see Plan entity) */
 export type TenantPlan     = 'starter' | 'pro' | 'enterprise';
-export type BusinessType   = 'retail' | 'wholesale' | 'hybrid' | 'pharmacy' | 'restaurant' | 'service';
+
+// Kept in sync with nestjs-pos's SeedBusinessType (common/database/seeds/business-profile.seed.ts)
+// and CompleteOnboardingDto's SEED_PROFILES — the full set of seedable business profiles.
+// Single source of truth: dto/index.ts imports this instead of redefining its own list.
+export const BUSINESS_TYPES = [
+  'retail',
+  'wholesale',
+  'hybrid',
+  'pharmacy',
+  'grocery',
+  'cosmetics',
+  'bakery',
+  'electronics',
+  'hardware',
+  'restaurant',
+  'service',
+] as const;
+export type BusinessType = (typeof BUSINESS_TYPES)[number];
 
 @Entity('tenants')
 export class Tenant {
@@ -57,10 +74,10 @@ export class Tenant {
   @Column({ type: 'timestamp', nullable: true })
   subscriptionEndsAt: Date | null;
 
-  @ApiPropertyOptional({ enum: ['retail', 'wholesale', 'hybrid', 'pharmacy', 'restaurant', 'service'] })
+  @ApiPropertyOptional({ enum: BUSINESS_TYPES })
   @Column({
     type: 'enum',
-    enum: ['retail', 'wholesale', 'hybrid', 'pharmacy', 'restaurant', 'service'],
+    enum: BUSINESS_TYPES,
     nullable: true,
   })
   businessType: BusinessType | null;

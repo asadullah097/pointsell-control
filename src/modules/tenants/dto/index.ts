@@ -1,10 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsEmail, IsEnum, IsIn, IsObject, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TenantPlan, TenantStatus } from '../tenant.entity';
+import { BUSINESS_TYPES, BusinessType, TenantPlan, TenantStatus } from '../tenant.entity';
 
-export const BUSINESS_TYPES = ['retail', 'wholesale', 'hybrid', 'pharmacy', 'restaurant', 'service'] as const;
-export type BusinessType = typeof BUSINESS_TYPES[number];
+export { BUSINESS_TYPES, BusinessType };
 
 export class AutoLicenseDto {
   @ApiPropertyOptional({ enum: ['online', 'offline'], default: 'online' })
