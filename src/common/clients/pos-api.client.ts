@@ -154,14 +154,22 @@ export class PosApiClient {
     }
 
     const url = `${this.baseUrl}/v1/auth/register-tenant`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Control-Panel-Key': this.apiKey!,
-      },
-      body: JSON.stringify(body),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Control-Panel-Key': this.apiKey!,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      this.logger.error(`POS provision ${url} unreachable: ${(err as Error).message}`);
+      throw new InternalServerErrorException(
+        `Could not reach the POS API at ${this.baseUrl} — is nestjs-pos running? (${(err as Error).message})`,
+      );
+    }
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -268,11 +276,19 @@ export class PosApiClient {
       'X-Control-Panel-Key': this.apiKey!,
     };
 
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch (err) {
+      this.logger.error(`POS API ${method} ${url} unreachable: ${(err as Error).message}`);
+      throw new InternalServerErrorException(
+        `Could not reach the POS API at ${this.baseUrl} — is nestjs-pos running? (${(err as Error).message})`,
+      );
+    }
 
     if (res.status === 204) return undefined as T;
 

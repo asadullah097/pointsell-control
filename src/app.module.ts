@@ -12,6 +12,7 @@ import { Release } from './modules/releases/release.entity';
 import { Admin } from './modules/auth/admin.entity';
 import { Plan } from './modules/plans/plan.entity';
 import { Transaction } from './modules/transactions/transaction.entity';
+import { SignupRequest } from './modules/signup-requests/signup-request.entity';
 
 import { AuthController } from './modules/auth/auth.controller';
 import { AdminsController } from './modules/auth/admins.controller';
@@ -23,16 +24,19 @@ import { HealthController } from './modules/health/health.controller';
 import { PlansController } from './modules/plans/plans.controller';
 import { TicketsController } from './modules/tickets/tickets.controller';
 import { TransactionsController } from './modules/transactions/transactions.controller';
+import { SignupRequestsController } from './modules/signup-requests/signup-requests.controller';
 
 import { LicenseService } from './modules/licenses/license.service';
 import { LicenseExpiryService } from './modules/licenses/license-expiry.service';
 import { TenantsService } from './modules/tenants/tenants.service';
 import { PlansService } from './modules/plans/plans.service';
 import { TransactionsService } from './modules/transactions/transactions.service';
+import { SignupRequestsService } from './modules/signup-requests/signup-requests.service';
 import { PlansSeeder } from './modules/plans/plans.seeder';
 import { AdminSeeder } from './modules/auth/admin.seeder';
 import { AdminGuard } from './common/guards/admin.guard';
 import { PosApiClient } from './common/clients/pos-api.client';
+import { MailerService } from './common/mailer/mailer.service';
 
 const publicDir = join(__dirname, '..', 'public');
 
@@ -58,13 +62,13 @@ const publicDir = join(__dirname, '..', 'public');
         username: config.get('DB_USER', 'postgres'),
         password: config.get('DB_PASS'),
         database: config.get('DB_NAME', 'pointsell_control'),
-        entities: [Tenant, License, Release, Admin, Plan, Transaction],
+        entities: [Tenant, License, Release, Admin, Plan, Transaction, SignupRequest],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') !== 'production',
       }),
     }),
 
-    TypeOrmModule.forFeature([Tenant, License, Release, Admin, Plan, Transaction]),
+    TypeOrmModule.forFeature([Tenant, License, Release, Admin, Plan, Transaction, SignupRequest]),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -86,6 +90,7 @@ const publicDir = join(__dirname, '..', 'public');
     PlansController,
     TicketsController,
     TransactionsController,
+    SignupRequestsController,
   ],
   providers: [
     LicenseService,
@@ -93,10 +98,12 @@ const publicDir = join(__dirname, '..', 'public');
     TenantsService,
     PlansService,
     TransactionsService,
+    SignupRequestsService,
     PlansSeeder,
     AdminSeeder,
     AdminGuard,
     PosApiClient,
+    MailerService,
   ],
 })
 export class AppModule {}

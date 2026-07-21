@@ -3,6 +3,7 @@ import LoginPage from './pages/Login';
 import DashboardPage from './pages/Dashboard';
 import TenantsPage from './pages/Tenants';
 import TenantDetailPage from './pages/TenantDetail';
+import SignupRequestsPage from './pages/SignupRequests';
 import ReleasesPage from './pages/Releases';
 import AdminsPage from './pages/Admins';
 import PlansPage from './pages/Plans';
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="tenants" element={<TenantsPage />} />
           <Route path="tenants/:id" element={<TenantDetailPage />} />
+          <Route path="signup-requests" element={<SignupRequestsPage />} />
           <Route path="plans" element={<PlansPage />} />
           <Route path="releases" element={<ReleasesPage />} />
           <Route path="admins" element={<AdminsPage />} />

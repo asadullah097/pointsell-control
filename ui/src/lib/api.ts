@@ -87,6 +87,15 @@ export const api = {
   createAdmin: (body: any) => request<any>('POST', '/auth/admins', body),
   deleteAdmin: (id: string) => request<void>('DELETE', `/auth/admins/${id}`),
 
+  // Signup requests (public landing page submissions awaiting review)
+  listSignupRequests: (status?: string) => request<any[]>('GET', `/signup-requests${status && status !== 'all' ? `?status=${status}` : ''}`),
+  getSignupRequest: (id: string) => request<any>('GET', `/signup-requests/${id}`),
+  approveSignupRequest: (id: string, body: {
+    planId?: string; trialDays?: number; slug?: string; businessTypeOverride?: string; provisionPos?: boolean;
+  }) => request<any>('POST', `/signup-requests/${id}/approve`, body),
+  rejectSignupRequest: (id: string, reason?: string) =>
+    request<any>('POST', `/signup-requests/${id}/reject`, { reason }),
+
   // Support tickets
   listTickets: () => request<any[]>('GET', '/tickets'),
   getTicket: (tenantId: string, ticketId: string) => request<any>('GET', `/tickets/${tenantId}/${ticketId}`),
