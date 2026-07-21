@@ -102,12 +102,15 @@ const STEPS: StepDef[] = [
       <div>
         <p style={S.bodyText}>
           The fingerprint uniquely identifies the client machine and binds the license to it.
-          Run this in the PointSell folder on the client machine:
+          The tool ships inside the release zip — no separate download needed. Run this in the
+          PointSell folder on the client machine:
         </p>
-        <CodeBlock>{`node tools/fingerprint/fingerprint.js --copy\n# Prints a 64-character hex hash and copies it to clipboard`}</CodeBlock>
+        <CodeBlock>{`node tools/fingerprint.js --copy\n# Prints a 64-character hex hash and copies it to clipboard`}</CodeBlock>
         <p style={{ ...S.bodyText, marginTop: 12 }}>
           <strong>Copy the hash</strong> and paste it into the License Generator (★) below.
-          You can also fetch it from the browser once the app is running:
+          A fresh install with no license.key yet runs normally (nothing is locked until a
+          license is added and later expires), so you can also fetch the fingerprint from the
+          browser once logged in as the seeded admin:
         </p>
         <CodeBlock>{`GET http://localhost:3003/v1/license/fingerprint`}</CodeBlock>
       </div>
@@ -153,6 +156,37 @@ const STEPS: StepDef[] = [
         <p style={{ ...S.bodyText, marginTop: 14 }}>
           The app reads <code style={S.mono}>license.key</code> automatically on startup — no
           activation step needed. Open <code style={S.mono}>http://localhost:3003</code> in the browser.
+        </p>
+      </div>
+    ),
+  },
+  {
+    title: 'Verify the license',
+    tag: 'At client site',
+    content: () => (
+      <div>
+        <p style={S.bodyText}>
+          Before handing over, confirm the license is genuinely valid for <em>this</em> machine —
+          don't just trust that the app started. The verify tool also ships in the release zip
+          and checks the signature, fingerprint match, and expiry independently of the running app:
+        </p>
+        <CodeBlock>{`node tools/verify-license.js ./license.key`}</CodeBlock>
+        <p style={{ ...S.bodyText, marginTop: 12 }}>A healthy license prints:</p>
+        <CodeBlock>{`  Signature  : ✓ VALID\n  Fingerprint: ✓ MATCHES this machine\n  Expiry     : ✓ VALID\n\n  Overall    : ✅ LICENSE OK`}</CodeBlock>
+        <div style={S.infoBox}>
+          <strong>Fingerprint mismatch?</strong> The license.key was generated for a different
+          machine (wrong fingerprint pasted into the generator) — regenerate it with the correct
+          hash from Step 4. <strong>Signature invalid?</strong> The file was corrupted in transit,
+          or generated with the wrong keypair — regenerate and re-copy. Either failure also shows
+          up as <code style={S.mono}>status: "tampered"</code> at{' '}
+          <code style={S.mono}>GET /v1/license/status</code> once the app is running.
+        </div>
+        <p style={{ ...S.bodyText, marginTop: 12 }}>
+          This is also how <strong>single-machine enforcement</strong> works day-to-day: every
+          release now ships with <code style={S.mono}>LICENSE_ENFORCEMENT_ENABLED=true</code>, so
+          copying the same <code style={S.mono}>license.key</code> to a second computer produces a
+          fingerprint mismatch there and locks that install's owner/admin login until it gets its
+          own license — staff logins are unaffected either way.
         </p>
       </div>
     ),
